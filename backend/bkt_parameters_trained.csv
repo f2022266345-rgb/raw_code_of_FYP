@@ -1,0 +1,951 @@
+skill,param,class,value
+Area Parallelogram,prior,default,0.8415328521475247
+Area Parallelogram,learns,default,0.07797385169854738
+Area Parallelogram,guesses,default,0.47425201765758884
+Area Parallelogram,slips,default,0.06703582686999829
+Area Parallelogram,forgets,default,0.0
+Circumference ,prior,default,0.2009656469364212
+Circumference ,learns,default,0.4141980653185837
+Circumference ,guesses,default,0.7569778387664893
+Circumference ,slips,default,0.28067235974846894
+Circumference ,forgets,default,0.0
+Complementary and Supplementary Angles,prior,default,0.6390747267974659
+Complementary and Supplementary Angles,learns,default,0.35599375376897324
+Complementary and Supplementary Angles,guesses,default,0.7424143365330286
+Complementary and Supplementary Angles,slips,default,0.08077364900466288
+Complementary and Supplementary Angles,forgets,default,0.0
+Absolute Value,prior,default,0.30934491109437473
+Absolute Value,learns,default,0.04178638081876536
+Absolute Value,guesses,default,0.7225375744421667
+Absolute Value,slips,default,0.015244473969008288
+Absolute Value,forgets,default,0.0
+"Angles - Obtuse, Acute, and Right",prior,default,0.39145814836272336
+"Angles - Obtuse, Acute, and Right",learns,default,0.24958398546453434
+"Angles - Obtuse, Acute, and Right",guesses,default,0.8640387455523229
+"Angles - Obtuse, Acute, and Right",slips,default,0.021765765817169307
+"Angles - Obtuse, Acute, and Right",forgets,default,0.0
+Rounding,prior,default,0.18019953178972356
+Rounding,learns,default,0.18071414471806668
+Rounding,guesses,default,0.7923749665147232
+Rounding,slips,default,0.13768713064087623
+Rounding,forgets,default,0.0
+Multiplication and Division Integers,prior,default,0.5662638508743754
+Multiplication and Division Integers,learns,default,0.04430013886830769
+Multiplication and Division Integers,guesses,default,0.7503433524705372
+Multiplication and Division Integers,slips,default,0.04613362616995598
+Multiplication and Division Integers,forgets,default,0.0
+Proportion,prior,default,0.4179340233431127
+Proportion,learns,default,0.06623472339559329
+Proportion,guesses,default,0.7078762087797793
+Proportion,slips,default,0.09348097197183654
+Proportion,forgets,default,0.0
+Multiplication and Division Positive Decimals,prior,default,0.7087144737310268
+Multiplication and Division Positive Decimals,learns,default,0.26592034364576145
+Multiplication and Division Positive Decimals,guesses,default,0.6947142433923168
+Multiplication and Division Positive Decimals,slips,default,0.13903940471034673
+Multiplication and Division Positive Decimals,forgets,default,0.0
+Ordering Fractions,prior,default,0.25075804144543234
+Ordering Fractions,learns,default,0.424485768046875
+Ordering Fractions,guesses,default,0.8448637566470413
+Ordering Fractions,slips,default,0.2612445035973659
+Ordering Fractions,forgets,default,0.0
+"Expanded, Standard and Word Notation",prior,default,0.9942014668255176
+"Expanded, Standard and Word Notation",learns,default,0.2234479853037863
+"Expanded, Standard and Word Notation",guesses,default,0.3964072117977532
+"Expanded, Standard and Word Notation",slips,default,0.12918100475906338
+"Expanded, Standard and Word Notation",forgets,default,0.0
+Ordering Positive Decimals,prior,default,0.8196895641926576
+Ordering Positive Decimals,learns,default,0.023534443056619954
+Ordering Positive Decimals,guesses,default,0.5776477997947131
+Ordering Positive Decimals,slips,default,0.12244551488837187
+Ordering Positive Decimals,forgets,default,0.0
+Least Common Multiple,prior,default,0.692976391941612
+Least Common Multiple,learns,default,0.1955590526046058
+Least Common Multiple,guesses,default,0.5380142545737178
+Least Common Multiple,slips,default,0.16563029881416375
+Least Common Multiple,forgets,default,0.0
+Equivalent Fractions,prior,default,0.8492001138442697
+Equivalent Fractions,learns,default,0.10600638475731976
+Equivalent Fractions,guesses,default,0.386291271716301
+Equivalent Fractions,slips,default,0.11837573113855768
+Equivalent Fractions,forgets,default,0.0
+Divisibility Rules,prior,default,0.802799531987385
+Divisibility Rules,learns,default,0.018455676364685383
+Divisibility Rules,guesses,default,0.5669087409029663
+Divisibility Rules,slips,default,0.1744818598660295
+Divisibility Rules,forgets,default,0.0
+Multiplication Fractions,prior,default,0.18785755391087117
+Multiplication Fractions,learns,default,0.4628673994091065
+Multiplication Fractions,guesses,default,0.8080278304001417
+Multiplication Fractions,slips,default,0.17223434829139125
+Multiplication Fractions,forgets,default,0.0
+Probability of a Single Event,prior,default,0.8950177950961412
+Probability of a Single Event,learns,default,0.15023758208672838
+Probability of a Single Event,guesses,default,0.4334557230178726
+Probability of a Single Event,slips,default,0.16711324042331482
+Probability of a Single Event,forgets,default,0.0
+Addition and Subtraction Fractions,prior,default,0.9087775253817898
+Addition and Subtraction Fractions,learns,default,0.06882294662705472
+Addition and Subtraction Fractions,guesses,default,0.4079171598025148
+Addition and Subtraction Fractions,slips,default,0.15590552923129322
+Addition and Subtraction Fractions,forgets,default,0.0
+Counting Methods,prior,default,0.2796746736832471
+Counting Methods,learns,default,0.12343442769358454
+Counting Methods,guesses,default,0.7657407438650431
+Counting Methods,slips,default,0.038057630372280486
+Counting Methods,forgets,default,0.0
+Scientific Notation,prior,default,0.4523896888184313
+Scientific Notation,learns,default,0.283318996662952
+Scientific Notation,guesses,default,0.7382866263153688
+Scientific Notation,slips,default,0.09565230070775331
+Scientific Notation,forgets,default,0.0
+Ordering Integers,prior,default,0.9782051414272279
+Ordering Integers,learns,default,0.3325845899564959
+Ordering Integers,guesses,default,0.12490705373539863
+Ordering Integers,slips,default,0.10275275198835548
+Ordering Integers,forgets,default,0.0
+Addition and Subtraction Positive Decimals,prior,default,0.8210161865960743
+Addition and Subtraction Positive Decimals,learns,default,0.19651587408052376
+Addition and Subtraction Positive Decimals,guesses,default,0.6600017716107093
+Addition and Subtraction Positive Decimals,slips,default,0.1026001962457973
+Addition and Subtraction Positive Decimals,forgets,default,0.0
+Solving for a variable,prior,default,0.8471193012071854
+Solving for a variable,learns,default,0.2534117018813858
+Solving for a variable,guesses,default,0.5389653372919855
+Solving for a variable,slips,default,0.13762829445082653
+Solving for a variable,forgets,default,0.0
+Exponents,prior,default,0.9837014293664952
+Exponents,learns,default,0.2153191223347534
+Exponents,guesses,default,0.16261617977928539
+Exponents,slips,default,0.16141989932915235
+Exponents,forgets,default,0.0
+Substitution,prior,default,0.7856950950832066
+Substitution,learns,default,0.028317628060923156
+Substitution,guesses,default,0.5125012831228756
+Substitution,slips,default,0.10701683801920077
+Substitution,forgets,default,0.0
+Conversion of Fraction Decimals Percents,prior,default,0.8311961752601693
+Conversion of Fraction Decimals Percents,learns,default,0.10365959100901198
+Conversion of Fraction Decimals Percents,guesses,default,0.6268752269958039
+Conversion of Fraction Decimals Percents,slips,default,0.10385457991444545
+Conversion of Fraction Decimals Percents,forgets,default,0.0
+Multiplication Whole Numbers,prior,default,0.445550662044065
+Multiplication Whole Numbers,learns,default,0.1626549419889139
+Multiplication Whole Numbers,guesses,default,0.7264655267044899
+Multiplication Whole Numbers,slips,default,0.05620180090251896
+Multiplication Whole Numbers,forgets,default,0.0
+Square Root,prior,default,0.5430574928125038
+Square Root,learns,default,0.4287102224225602
+Square Root,guesses,default,0.6985308042436768
+Square Root,slips,default,0.10122383635235874
+Square Root,forgets,default,0.0
+Composition of Function Adding,prior,default,0.9519160576343036
+Composition of Function Adding,learns,default,0.6465154214907921
+Composition of Function Adding,guesses,default,0.4956152138751878
+Composition of Function Adding,slips,default,0.03369375235092006
+Composition of Function Adding,forgets,default,0.0
+Nets of 3D Figures,prior,default,0.8453835971810428
+Nets of 3D Figures,learns,default,0.2762006597520509
+Nets of 3D Figures,guesses,default,0.636129391279864
+Nets of 3D Figures,slips,default,0.016880106863898504
+Nets of 3D Figures,forgets,default,0.0
+Polynomial Factors,prior,default,0.9522582621076524
+Polynomial Factors,learns,default,0.31325554579683196
+Polynomial Factors,guesses,default,0.45470120212345
+Polynomial Factors,slips,default,0.11281460437441489
+Polynomial Factors,forgets,default,0.0
+Write Linear Equation from Ordered Pairs,prior,default,0.6876713731981478
+Write Linear Equation from Ordered Pairs,learns,default,0.04245306600749207
+Write Linear Equation from Ordered Pairs,guesses,default,0.4251578391144162
+Write Linear Equation from Ordered Pairs,slips,default,0.17948622047419083
+Write Linear Equation from Ordered Pairs,forgets,default,0.0
+Percent Of,prior,default,0.6536936476917666
+Percent Of,learns,default,0.1461443934143904
+Percent Of,guesses,default,0.6003848079008918
+Percent Of,slips,default,0.06247345880150816
+Percent Of,forgets,default,0.0
+Equation Solving More Than Two Steps,prior,default,0.9059995326188387
+Equation Solving More Than Two Steps,learns,default,0.12237491536163198
+Equation Solving More Than Two Steps,guesses,default,0.23549121133247258
+Equation Solving More Than Two Steps,slips,default,0.21652182009242166
+Equation Solving More Than Two Steps,forgets,default,0.0
+Graph Shape,prior,default,0.6390950154484101
+Graph Shape,learns,default,0.09629406180821169
+Graph Shape,guesses,default,0.447980413305545
+Graph Shape,slips,default,0.06834550755851643
+Graph Shape,forgets,default,0.0
+Median,prior,default,0.8267276847566604
+Median,learns,default,0.09078149463682404
+Median,guesses,default,0.39804465342968487
+Median,slips,default,0.1479310193669745
+Median,forgets,default,0.0
+Pattern Finding ,prior,default,0.6221222907667344
+Pattern Finding ,learns,default,0.22460880205615763
+Pattern Finding ,guesses,default,0.5829768596580077
+Pattern Finding ,slips,default,0.16264976614489382
+Pattern Finding ,forgets,default,0.0
+Volume Rectangular Prism,prior,default,0.589291877207024
+Volume Rectangular Prism,learns,default,0.16798991217197687
+Volume Rectangular Prism,guesses,default,0.7683066323956317
+Volume Rectangular Prism,slips,default,0.061707445133512825
+Volume Rectangular Prism,forgets,default,0.0
+Finding Percents,prior,default,0.8983766286104541
+Finding Percents,learns,default,0.5490020206160573
+Finding Percents,guesses,default,0.08867381261691999
+Finding Percents,slips,default,0.2284013300223635
+Finding Percents,forgets,default,0.0
+Addition and Subtraction Integers,prior,default,0.6986704996815968
+Addition and Subtraction Integers,learns,default,0.007974206408377876
+Addition and Subtraction Integers,guesses,default,0.5650158094433989
+Addition and Subtraction Integers,slips,default,0.11920337532515196
+Addition and Subtraction Integers,forgets,default,0.0
+Range,prior,default,0.8187061548719231
+Range,learns,default,0.1238529810518585
+Range,guesses,default,0.45641199038986374
+Range,slips,default,0.06708779919708331
+Range,forgets,default,0.0
+Mean,prior,default,0.3944086294596515
+Mean,learns,default,0.23941014487297232
+Mean,guesses,default,0.679016079246116
+Mean,slips,default,0.2526878129867399
+Mean,forgets,default,0.0
+Surface Area Rectangular Prism,prior,default,0.6704470912485704
+Surface Area Rectangular Prism,learns,default,0.29638925002558675
+Surface Area Rectangular Prism,guesses,default,0.4447260876166692
+Surface Area Rectangular Prism,slips,default,0.15601044404189582
+Surface Area Rectangular Prism,forgets,default,0.0
+Parallel and Perpendicular Lines,prior,default,0.39990414738367996
+Parallel and Perpendicular Lines,learns,default,0.29277671087170304
+Parallel and Perpendicular Lines,guesses,default,0.6459538661645935
+Parallel and Perpendicular Lines,slips,default,0.01865539864588085
+Parallel and Perpendicular Lines,forgets,default,0.0
+Percent Increase or Decrease,prior,default,0.5400316485055395
+Percent Increase or Decrease,learns,default,0.3177099403713453
+Percent Increase or Decrease,guesses,default,0.3888526504063817
+Percent Increase or Decrease,slips,default,0.051660634583866494
+Percent Increase or Decrease,forgets,default,0.0
+Simplifying Expressions positive exponents,prior,default,0.9583879569361355
+Simplifying Expressions positive exponents,learns,default,0.3667818603411225
+Simplifying Expressions positive exponents,guesses,default,0.3658582614189904
+Simplifying Expressions positive exponents,slips,default,0.1932105101207315
+Simplifying Expressions positive exponents,forgets,default,0.0
+Prime Factor,prior,default,0.6880510003437679
+Prime Factor,learns,default,0.15425347798766623
+Prime Factor,guesses,default,0.6035199664896469
+Prime Factor,slips,default,0.09342209778851458
+Prime Factor,forgets,default,0.0
+Solving Systems of Linear Equations by Graphing,prior,default,0.768633628818134
+Solving Systems of Linear Equations by Graphing,learns,default,0.009187279179817723
+Solving Systems of Linear Equations by Graphing,guesses,default,0.3996558977155453
+Solving Systems of Linear Equations by Graphing,slips,default,0.13850835580668336
+Solving Systems of Linear Equations by Graphing,forgets,default,0.0
+Equation Solving Two or Fewer Steps,prior,default,0.6838417971844314
+Equation Solving Two or Fewer Steps,learns,default,0.012381976932557406
+Equation Solving Two or Fewer Steps,guesses,default,0.6261884664800679
+Equation Solving Two or Fewer Steps,slips,default,0.11680266108172131
+Equation Solving Two or Fewer Steps,forgets,default,0.0
+Finding Slope From Situation,prior,default,0.42549347654431313
+Finding Slope From Situation,learns,default,0.07577367986470913
+Finding Slope From Situation,guesses,default,0.7939085621072094
+Finding Slope From Situation,slips,default,0.03522703270151911
+Finding Slope From Situation,forgets,default,0.0
+Scale Factor,prior,default,0.8337387419778706
+Scale Factor,learns,default,0.3042612843948661
+Scale Factor,guesses,default,0.5316825948502062
+Scale Factor,slips,default,0.1548676844526964
+Scale Factor,forgets,default,0.0
+Unit Rate,prior,default,0.26889316745330066
+Unit Rate,learns,default,0.1547954080485334
+Unit Rate,guesses,default,0.680105819286846
+Unit Rate,slips,default,0.1476791086650452
+Unit Rate,forgets,default,0.0
+Order of Operations All,prior,default,0.5182087831039438
+Order of Operations All,learns,default,0.04586237976577398
+Order of Operations All,guesses,default,0.5561640604360403
+Order of Operations All,slips,default,0.1351787092086656
+Order of Operations All,forgets,default,0.0
+Write Linear Equation from Slope and y-intercept,prior,default,0.7795068878789659
+Write Linear Equation from Slope and y-intercept,learns,default,0.32249906279247503
+Write Linear Equation from Slope and y-intercept,guesses,default,0.5707973874903135
+Write Linear Equation from Slope and y-intercept,slips,default,0.013577760647905597
+Write Linear Equation from Slope and y-intercept,forgets,default,0.0
+Ordering Real Numbers,prior,default,0.5517946956294658
+Ordering Real Numbers,learns,default,0.42156633661318715
+Ordering Real Numbers,guesses,default,0.4493355708486932
+Ordering Real Numbers,slips,default,0.1382573229369233
+Ordering Real Numbers,forgets,default,0.0
+Angles on Parallel Lines Cut by a Transversal,prior,default,0.7054706343257341
+Angles on Parallel Lines Cut by a Transversal,learns,default,0.7969650887215517
+Angles on Parallel Lines Cut by a Transversal,guesses,default,0.66179821092035
+Angles on Parallel Lines Cut by a Transversal,slips,default,0.02236234285725554
+Angles on Parallel Lines Cut by a Transversal,forgets,default,0.0
+Area Rectangle,prior,default,0.6960619567262711
+Area Rectangle,learns,default,0.16412500538736194
+Area Rectangle,guesses,default,0.7219431761533098
+Area Rectangle,slips,default,0.05030053743790645
+Area Rectangle,forgets,default,0.0
+Division Fractions,prior,default,0.9538315380739576
+Division Fractions,learns,default,0.20133647497156623
+Division Fractions,guesses,default,0.16453389541756708
+Division Fractions,slips,default,0.1714044847419022
+Division Fractions,forgets,default,0.0
+Finding Slope from Ordered Pairs,prior,default,0.3106433064194798
+Finding Slope from Ordered Pairs,learns,default,0.44039634346840684
+Finding Slope from Ordered Pairs,guesses,default,0.8087512040280275
+Finding Slope from Ordered Pairs,slips,default,0.08603100934847362
+Finding Slope from Ordered Pairs,forgets,default,0.0
+Pythagorean Theorem,prior,default,0.1907449209866256
+Pythagorean Theorem,learns,default,0.5305086971076012
+Pythagorean Theorem,guesses,default,0.7502281133302333
+Pythagorean Theorem,slips,default,0.19590492182212613
+Pythagorean Theorem,forgets,default,0.0
+Combining Like Terms,prior,default,0.6603888525472908
+Combining Like Terms,learns,default,0.1441590833834573
+Combining Like Terms,guesses,default,0.5327683630858008
+Combining Like Terms,slips,default,0.18969583726682207
+Combining Like Terms,forgets,default,0.0
+Calculations with Similar Figures,prior,default,0.9535171978921986
+Calculations with Similar Figures,learns,default,0.9932177960243246
+Calculations with Similar Figures,guesses,default,0.14530297569451633
+Calculations with Similar Figures,slips,default,0.17276467645701915
+Calculations with Similar Figures,forgets,default,0.0
+Volume Cylinder,prior,default,0.7118692044809025
+Volume Cylinder,learns,default,0.3740153935867534
+Volume Cylinder,guesses,default,0.3626950307785951
+Volume Cylinder,slips,default,0.07036247438141512
+Volume Cylinder,forgets,default,0.0
+Finding y-intercept from Linear Equation,prior,default,0.603019364086728
+Finding y-intercept from Linear Equation,learns,default,0.23229146935931147
+Finding y-intercept from Linear Equation,guesses,default,0.7440890446601328
+Finding y-intercept from Linear Equation,slips,default,0.09746920682239629
+Finding y-intercept from Linear Equation,forgets,default,0.0
+Finding Slope From Equation,prior,default,0.6631855315074523
+Finding Slope From Equation,learns,default,0.26416259568195427
+Finding Slope From Equation,guesses,default,0.627577217749962
+Finding Slope From Equation,slips,default,0.11295191837312246
+Finding Slope From Equation,forgets,default,0.0
+Box and Whisker,prior,default,0.5789353239015382
+Box and Whisker,learns,default,0.06210198751415606
+Box and Whisker,guesses,default,0.5578980593077362
+Box and Whisker,slips,default,0.11337243785423562
+Box and Whisker,forgets,default,0.0
+Venn Diagram,prior,default,0.48505555857513993
+Venn Diagram,learns,default,0.18866583868361483
+Venn Diagram,guesses,default,0.7075925907118389
+Venn Diagram,slips,default,0.21781323276538367
+Venn Diagram,forgets,default,0.0
+Area Circle,prior,default,0.8699147331121071
+Area Circle,learns,default,0.1651295358371134
+Area Circle,guesses,default,0.09251078127198432
+Area Circle,slips,default,0.24656087954432107
+Area Circle,forgets,default,0.0
+Perimeter of a Polygon,prior,default,0.5971992576470644
+Perimeter of a Polygon,learns,default,0.10553336464255023
+Perimeter of a Polygon,guesses,default,0.5716977354071455
+Perimeter of a Polygon,slips,default,0.05309230467983137
+Perimeter of a Polygon,forgets,default,0.0
+Surface Area Sphere,prior,default,0.8457686783742375
+Surface Area Sphere,learns,default,0.3032436004546695
+Surface Area Sphere,guesses,default,0.25660390815166073
+Surface Area Sphere,slips,default,0.09528595071130841
+Surface Area Sphere,forgets,default,0.0
+Area Trapezoid,prior,default,0.9848888946420403
+Area Trapezoid,learns,default,0.16190057313836304
+Area Trapezoid,guesses,default,0.08530195737166898
+Area Trapezoid,slips,default,0.341272062246211
+Area Trapezoid,forgets,default,0.0
+Interior Angles Triangle,prior,default,0.6234223678873845
+Interior Angles Triangle,learns,default,0.021784038020912545
+Interior Angles Triangle,guesses,default,0.5951429023773764
+Interior Angles Triangle,slips,default,0.08718828419479896
+Interior Angles Triangle,forgets,default,0.0
+"Order of Operations +,-,/,* () positive reals",prior,default,0.6026021640795022
+"Order of Operations +,-,/,* () positive reals",learns,default,0.22696487842811047
+"Order of Operations +,-,/,* () positive reals",guesses,default,0.6030254683660855
+"Order of Operations +,-,/,* () positive reals",slips,default,0.10213338740622994
+"Order of Operations +,-,/,* () positive reals",forgets,default,0.0
+Computation with Real Numbers,prior,default,0.7996996884711333
+Computation with Real Numbers,learns,default,0.2058588123465944
+Computation with Real Numbers,guesses,default,0.2727412865259263
+Computation with Real Numbers,slips,default,0.054580476820187594
+Computation with Real Numbers,forgets,default,0.0
+Equal As Balance Concept,prior,default,0.23209206893142081
+Equal As Balance Concept,learns,default,1.0
+Equal As Balance Concept,guesses,default,0.8208918922166601
+Equal As Balance Concept,slips,default,0.022915933302321865
+Equal As Balance Concept,forgets,default,0.0
+Write Linear Equation from Situation,prior,default,0.43311278929322555
+Write Linear Equation from Situation,learns,default,0.3625795333504361
+Write Linear Equation from Situation,guesses,default,0.7470660772964463
+Write Linear Equation from Situation,slips,default,0.047772409172992136
+Write Linear Equation from Situation,forgets,default,0.0
+Solving Systems of Linear Equations,prior,default,0.37349326679553646
+Solving Systems of Linear Equations,learns,default,0.05617533582987074
+Solving Systems of Linear Equations,guesses,default,0.5363480450522202
+Solving Systems of Linear Equations,slips,default,0.11157180194905153
+Solving Systems of Linear Equations,forgets,default,0.0
+Write Linear Equation from Graph,prior,default,0.7765793735412493
+Write Linear Equation from Graph,learns,default,0.27564559612742556
+Write Linear Equation from Graph,guesses,default,0.34332766845494167
+Write Linear Equation from Graph,slips,default,0.2919794178105228
+Write Linear Equation from Graph,forgets,default,0.0
+Factoring Trinomials,prior,default,0.6306580485647959
+Factoring Trinomials,learns,default,0.9668381099627492
+Factoring Trinomials,guesses,default,0.07406439129125471
+Factoring Trinomials,slips,default,0.2002453463836787
+Factoring Trinomials,forgets,default,0.0
+Histogram as Table or Graph,prior,default,0.801288359033997
+Histogram as Table or Graph,learns,default,0.05763003255936626
+Histogram as Table or Graph,guesses,default,0.5514783162531294
+Histogram as Table or Graph,slips,default,0.12049097163215072
+Histogram as Table or Graph,forgets,default,0.0
+Probability of Two Distinct Events,prior,default,0.7218760283498029
+Probability of Two Distinct Events,learns,default,0.07672901826138231
+Probability of Two Distinct Events,guesses,default,0.25994625245818875
+Probability of Two Distinct Events,slips,default,0.27469783728554553
+Probability of Two Distinct Events,forgets,default,0.0
+Volume Pyramid,prior,default,0.2890506638692436
+Volume Pyramid,learns,default,0.42969459535083177
+Volume Pyramid,guesses,default,0.7688960889416406
+Volume Pyramid,slips,default,0.06797114282789413
+Volume Pyramid,forgets,default,0.0
+Area Irregular Figure,prior,default,0.8779740898681763
+Area Irregular Figure,learns,default,0.003934646134706109
+Area Irregular Figure,guesses,default,0.23339151079286197
+Area Irregular Figure,slips,default,0.34375947221524705
+Area Irregular Figure,forgets,default,0.0
+Volume Cone,prior,default,0.8160344548036514
+Volume Cone,learns,default,0.49363522525113446
+Volume Cone,guesses,default,0.18953978434231972
+Volume Cone,slips,default,0.10516725356460929
+Volume Cone,forgets,default,0.0
+Greatest Common Factor,prior,default,0.6216421499120507
+Greatest Common Factor,learns,default,0.057503136943882684
+Greatest Common Factor,guesses,default,0.5625781451971367
+Greatest Common Factor,slips,default,0.031560995231414986
+Greatest Common Factor,forgets,default,0.0
+Distributive Property,prior,default,0.5068525591369419
+Distributive Property,learns,default,0.15582242210139735
+Distributive Property,guesses,default,0.5921996100403013
+Distributive Property,slips,default,0.10613342307372846
+Distributive Property,forgets,default,0.0
+Quadratic Formula to Solve Quadratic Equation,prior,default,0.34317649084588153
+Quadratic Formula to Solve Quadratic Equation,learns,default,0.2205461700671523
+Quadratic Formula to Solve Quadratic Equation,guesses,default,0.7408623181098016
+Quadratic Formula to Solve Quadratic Equation,slips,default,0.035253802212302364
+Quadratic Formula to Solve Quadratic Equation,forgets,default,0.0
+Number Line,prior,default,0.7907538142188849
+Number Line,learns,default,0.03949437539003853
+Number Line,guesses,default,0.1733509823923086
+Number Line,slips,default,0.1424360096885906
+Number Line,forgets,default,0.0
+Recognizing Equivalent Expressions,prior,default,0.6260708864388249
+Recognizing Equivalent Expressions,learns,default,0.22656914055722435
+Recognizing Equivalent Expressions,guesses,default,0.24181678422248187
+Recognizing Equivalent Expressions,slips,default,0.31944430078858765
+Recognizing Equivalent Expressions,forgets,default,0.0
+Picking Equation and Inequality from Choices,prior,default,0.4532870967143706
+Picking Equation and Inequality from Choices,learns,default,0.01375157501587803
+Picking Equation and Inequality from Choices,guesses,default,0.4019491767630004
+Picking Equation and Inequality from Choices,slips,default,0.059849738786777636
+Picking Equation and Inequality from Choices,forgets,default,0.0
+Recognize Linear Pattern,prior,default,0.09396372696979295
+Recognize Linear Pattern,learns,default,0.33859191521820925
+Recognize Linear Pattern,guesses,default,0.8458147198241933
+Recognize Linear Pattern,slips,default,0.2988924904050831
+Recognize Linear Pattern,forgets,default,0.0
+Scatter Plot,prior,default,0.8332507166782224
+Scatter Plot,learns,default,0.5921593448660474
+Scatter Plot,guesses,default,0.28772322758749935
+Scatter Plot,slips,default,0.06582803991531422
+Scatter Plot,forgets,default,0.0
+Multiplying non Monomial Polynomials,prior,default,0.9223907686359882
+Multiplying non Monomial Polynomials,learns,default,0.28463332263515917
+Multiplying non Monomial Polynomials,guesses,default,0.39695728770223637
+Multiplying non Monomial Polynomials,slips,default,0.1920301273575187
+Multiplying non Monomial Polynomials,forgets,default,0.0
+Surface Area Cylinder,prior,default,0.7449163094688633
+Surface Area Cylinder,learns,default,0.44328605702010077
+Surface Area Cylinder,guesses,default,0.4255405141131091
+Surface Area Cylinder,slips,default,0.15647433809931582
+Surface Area Cylinder,forgets,default,0.0
+Subtraction Whole Numbers,prior,default,0.6382122589008772
+Subtraction Whole Numbers,learns,default,0.490464411415425
+Subtraction Whole Numbers,guesses,default,0.6479539211416065
+Subtraction Whole Numbers,slips,default,0.014680543220935713
+Subtraction Whole Numbers,forgets,default,0.0
+D.4.8-understanding-concept-of-probabilities,prior,default,0.0852191907133414
+D.4.8-understanding-concept-of-probabilities,learns,default,0.5605180683443169
+D.4.8-understanding-concept-of-probabilities,guesses,default,0.924881078900286
+D.4.8-understanding-concept-of-probabilities,slips,default,0.11717797718705154
+D.4.8-understanding-concept-of-probabilities,forgets,default,0.0
+Unit Conversion Within a System,prior,default,0.02206784593357343
+Unit Conversion Within a System,learns,default,0.23249011407186548
+Unit Conversion Within a System,guesses,default,0.7401783288433981
+Unit Conversion Within a System,slips,default,0.5145007488669051
+Unit Conversion Within a System,forgets,default,0.0
+Point Plotting,prior,default,0.4882250193944394
+Point Plotting,learns,default,0.08352319512005527
+Point Plotting,guesses,default,0.7265977418066643
+Point Plotting,slips,default,0.040214524577252754
+Point Plotting,forgets,default,0.0
+Congruence,prior,default,0.3704445974396136
+Congruence,learns,default,0.5207100932994281
+Congruence,guesses,default,0.8984245232394829
+Congruence,slips,default,0.009509193967981068
+Congruence,forgets,default,0.0
+Making a Table from an Equation,prior,default,0.889651663752319
+Making a Table from an Equation,learns,default,0.2774954280118653
+Making a Table from an Equation,guesses,default,0.13490367350359161
+Making a Table from an Equation,slips,default,0.1044588472774331
+Making a Table from an Equation,forgets,default,0.0
+Rotations,prior,default,0.7049921773761073
+Rotations,learns,default,0.9442319711280908
+Rotations,guesses,default,0.2702675841100912
+Rotations,slips,default,0.020650063505449
+Rotations,forgets,default,0.0
+Prime Number,prior,default,0.82743915858682
+Prime Number,learns,default,0.022821417432310365
+Prime Number,guesses,default,0.5795321470813549
+Prime Number,slips,default,0.1275198785982636
+Prime Number,forgets,default,0.0
+Algebraic Solving,prior,default,0.543808949122294
+Algebraic Solving,learns,default,0.025159258460528706
+Algebraic Solving,guesses,default,0.4420886120399975
+Algebraic Solving,slips,default,0.0660404956316134
+Algebraic Solving,forgets,default,0.0
+Common Factor,prior,default,0.6114146152549041
+Common Factor,learns,default,0.9258976893810297
+Common Factor,guesses,default,0.31149050846408305
+Common Factor,slips,default,0.01472322036131605
+Common Factor,forgets,default,0.0
+Interior Angles Figures with More than 3 Sides,prior,default,0.8050149538219655
+Interior Angles Figures with More than 3 Sides,learns,default,0.10604060449813346
+Interior Angles Figures with More than 3 Sides,guesses,default,0.32699753874794013
+Interior Angles Figures with More than 3 Sides,slips,default,0.17528837539347092
+Interior Angles Figures with More than 3 Sides,forgets,default,0.0
+Addition Whole Numbers,prior,default,0.9294088346525742
+Addition Whole Numbers,learns,default,0.436794057423618
+Addition Whole Numbers,guesses,default,0.2703366358863414
+Addition Whole Numbers,slips,default,0.060777698708056334
+Addition Whole Numbers,forgets,default,0.0
+Area Triangle,prior,default,0.5863410296045166
+Area Triangle,learns,default,0.06203915687330806
+Area Triangle,guesses,default,0.5492071001552283
+Area Triangle,slips,default,0.13482998972784163
+Area Triangle,forgets,default,0.0
+Volume Prism,prior,default,0.4888207373764767
+Volume Prism,learns,default,0.4664483951696975
+Volume Prism,guesses,default,0.7648772501446517
+Volume Prism,slips,default,0.030439098328534094
+Volume Prism,forgets,default,0.0
+Transformation,prior,default,0.3852586751385364
+Transformation,learns,default,0.01492298348519341
+Transformation,guesses,default,0.20415150220612646
+Transformation,slips,default,0.10968290514729527
+Transformation,forgets,default,0.0
+Volume Sphere,prior,default,0.7697513565461154
+Volume Sphere,learns,default,0.38584931253621035
+Volume Sphere,guesses,default,0.2842759165868854
+Volume Sphere,slips,default,0.16774623609134653
+Volume Sphere,forgets,default,0.0
+Effect of Changing Dimensions of a Shape Prportionally,prior,default,0.5322830853459812
+Effect of Changing Dimensions of a Shape Prportionally,learns,default,0.5913326139397951
+Effect of Changing Dimensions of a Shape Prportionally,guesses,default,0.3087420650676772
+Effect of Changing Dimensions of a Shape Prportionally,slips,default,0.1537681857328474
+Effect of Changing Dimensions of a Shape Prportionally,forgets,default,0.0
+Unit Conversion Standard to Metric,prior,default,0.04020999284546864
+Unit Conversion Standard to Metric,learns,default,0.30260216244938015
+Unit Conversion Standard to Metric,guesses,default,0.5831604604916926
+Unit Conversion Standard to Metric,slips,default,0.5348509561525148
+Unit Conversion Standard to Metric,forgets,default,0.0
+Definition Pi,prior,default,0.5639359900067643
+Definition Pi,learns,default,0.07280915942670085
+Definition Pi,guesses,default,0.25845566770671646
+Definition Pi,slips,default,0.02736778909475414
+Definition Pi,forgets,default,0.0
+Finding Slope from Graph,prior,default,0.47306581586792357
+Finding Slope from Graph,learns,default,0.32178234353895335
+Finding Slope from Graph,guesses,default,0.7739206723184393
+Finding Slope from Graph,slips,default,0.005914049390667585
+Finding Slope from Graph,forgets,default,0.0
+Properties and Classification Quadrilaterals,prior,default,0.7964995733103633
+Properties and Classification Quadrilaterals,learns,default,0.12827560312789638
+Properties and Classification Quadrilaterals,guesses,default,0.6891753755643601
+Properties and Classification Quadrilaterals,slips,default,0.016909849361239696
+Properties and Classification Quadrilaterals,forgets,default,0.0
+Properties and Classification Prism,prior,default,0.796356227046918
+Properties and Classification Prism,learns,default,0.7359879001903549
+Properties and Classification Prism,guesses,default,0.5972265502234975
+Properties and Classification Prism,slips,default,0.06210407282414991
+Properties and Classification Prism,forgets,default,0.0
+Properties and Classification Triangles,prior,default,0.9494597730300529
+Properties and Classification Triangles,learns,default,0.16808569385523664
+Properties and Classification Triangles,guesses,default,0.11550355937205925
+Properties and Classification Triangles,slips,default,0.21893513119517435
+Properties and Classification Triangles,forgets,default,0.0
+Picking Expressions From Choices,prior,default,0.813187757098968
+Picking Expressions From Choices,learns,default,0.2433122715850864
+Picking Expressions From Choices,guesses,default,0.2380037951974611
+Picking Expressions From Choices,slips,default,0.20665462795681605
+Picking Expressions From Choices,forgets,default,0.0
+Properties and Classification Circle,prior,default,0.9077516680652662
+Properties and Classification Circle,learns,default,0.17797020078013562
+Properties and Classification Circle,guesses,default,0.641292304742758
+Properties and Classification Circle,slips,default,0.08793306275246467
+Properties and Classification Circle,forgets,default,0.0
+Common Multiple,prior,default,0.4988204884394306
+Common Multiple,learns,default,0.20941318299745462
+Common Multiple,guesses,default,0.7536225331580919
+Common Multiple,slips,default,0.04329739212667256
+Common Multiple,forgets,default,0.0
+Mode,prior,default,0.6321556122292203
+Mode,learns,default,0.1524545927213742
+Mode,guesses,default,0.755437013193792
+Mode,slips,default,0.06655165703434364
+Mode,forgets,default,0.0
+Midpoint,prior,default,0.6223920127629324
+Midpoint,learns,default,1.0
+Midpoint,guesses,default,0.12392305361877767
+Midpoint,slips,default,0.13211902496631334
+Midpoint,forgets,default,0.0
+Surface Area of Prism,prior,default,0.9405994252769688
+Surface Area of Prism,learns,default,0.2508230432916375
+Surface Area of Prism,guesses,default,0.42860910548136466
+Surface Area of Prism,slips,default,0.115847779557917
+Surface Area of Prism,forgets,default,0.0
+Solving Inequalities,prior,default,0.46296087573294614
+Solving Inequalities,learns,default,0.07703611311214664
+Solving Inequalities,guesses,default,0.40937836432743735
+Solving Inequalities,slips,default,0.1609111965187042
+Solving Inequalities,forgets,default,0.0
+Distance Formula,prior,default,0.3905990282053113
+Distance Formula,learns,default,0.5057664155538069
+Distance Formula,guesses,default,0.2617009355003031
+Distance Formula,slips,default,0.12651986770300186
+Distance Formula,forgets,default,0.0
+Commutative Property,prior,default,0.9723201515169222
+Commutative Property,learns,default,0.30672531561362565
+Commutative Property,guesses,default,0.3987898614521356
+Commutative Property,slips,default,0.16149284143145234
+Commutative Property,forgets,default,0.0
+Associative Property,prior,default,0.4046862426848833
+Associative Property,learns,default,0.00021127300038174235
+Associative Property,guesses,default,0.009622440712680395
+Associative Property,slips,default,0.002790929482719968
+Associative Property,forgets,default,0.0
+Properties and Classification Polygons with 5 or more sides,prior,default,0.597953558952867
+Properties and Classification Polygons with 5 or more sides,learns,default,0.24390559629370628
+Properties and Classification Polygons with 5 or more sides,guesses,default,0.6236068026318331
+Properties and Classification Polygons with 5 or more sides,slips,default,0.0624856904218758
+Properties and Classification Polygons with 5 or more sides,forgets,default,0.0
+Properties and Classification Rectangular Prisms,prior,default,0.9357445489615088
+Properties and Classification Rectangular Prisms,learns,default,0.6418876323878202
+Properties and Classification Rectangular Prisms,guesses,default,0.3037573217040322
+Properties and Classification Rectangular Prisms,slips,default,0.07860628463789018
+Properties and Classification Rectangular Prisms,forgets,default,0.0
+"Parts of a Polyomial, Terms, Coefficient, Monomial, Exponent, Variable",prior,default,0.35173798619329416
+"Parts of a Polyomial, Terms, Coefficient, Monomial, Exponent, Variable",learns,default,0.40816213961428394
+"Parts of a Polyomial, Terms, Coefficient, Monomial, Exponent, Variable",guesses,default,0.7714723301014915
+"Parts of a Polyomial, Terms, Coefficient, Monomial, Exponent, Variable",slips,default,0.06150148603130339
+"Parts of a Polyomial, Terms, Coefficient, Monomial, Exponent, Variable",forgets,default,0.0
+Reflection,prior,default,0.8888724705919153
+Reflection,learns,default,0.14468677928174567
+Reflection,guesses,default,0.10197235372311948
+Reflection,slips,default,0.15976222329423206
+Reflection,forgets,default,0.0
+Translations,prior,default,0.8058959350542443
+Translations,learns,default,0.9989137917583948
+Translations,guesses,default,0.02702174375854056
+Translations,slips,default,0.027475188443893513
+Translations,forgets,default,0.0
+Multiplication Positive Decimals,prior,default,0.48712921827528993
+Multiplication Positive Decimals,learns,default,0.0229743501108988
+Multiplication Positive Decimals,guesses,default,0.01965269092331472
+Multiplication Positive Decimals,slips,default,0.36302188766695487
+Multiplication Positive Decimals,forgets,default,0.0
+Circumference,prior,default,0.13255571459684048
+Circumference,learns,default,0.6020380029723104
+Circumference,guesses,default,0.529042717451468
+Circumference,slips,default,0.04685728565769398
+Circumference,forgets,default,0.0
+Concept Volume,prior,default,0.43969962588802736
+Concept Volume,learns,default,0.001470630763889389
+Concept Volume,guesses,default,0.3749242334244579
+Concept Volume,slips,default,0.024220861426552897
+Concept Volume,forgets,default,0.0
+Multiplication Proper Fractions,prior,default,0.6251678404549579
+Multiplication Proper Fractions,learns,default,0.100395163714139
+Multiplication Proper Fractions,guesses,default,0.36299022530871267
+Multiplication Proper Fractions,slips,default,0.16687543299788304
+Multiplication Proper Fractions,forgets,default,0.0
+Addition Mixed Fractions,prior,default,0.35113313145324937
+Addition Mixed Fractions,learns,default,0.18560334197140216
+Addition Mixed Fractions,guesses,default,0.013177627819288785
+Addition Mixed Fractions,slips,default,0.41630097165156793
+Addition Mixed Fractions,forgets,default,0.0
+Subtraction Proper Fractions,prior,default,0.3185111111963976
+Subtraction Proper Fractions,learns,default,0.0005224126823615104
+Subtraction Proper Fractions,guesses,default,0.33918046184764433
+Subtraction Proper Fractions,slips,default,0.04267080590065889
+Subtraction Proper Fractions,forgets,default,0.0
+Subtraction Mixed Fractions,prior,default,0.8107737075820357
+Subtraction Mixed Fractions,learns,default,0.09166758116160795
+Subtraction Mixed Fractions,guesses,default,0.031022501886604534
+Subtraction Mixed Fractions,slips,default,0.5430537327745986
+Subtraction Mixed Fractions,forgets,default,0.0
+Circle Concept,prior,default,0.01835089176794428
+Circle Concept,learns,default,0.0655070326005249
+Circle Concept,guesses,default,0.35545638478007874
+Circle Concept,slips,default,0.42497745613716137
+Circle Concept,forgets,default,0.0
+Addition Proper Fractions,prior,default,0.21073089995560268
+Addition Proper Fractions,learns,default,0.29408268241736646
+Addition Proper Fractions,guesses,default,0.39472066008136303
+Addition Proper Fractions,slips,default,0.21106792431277593
+Addition Proper Fractions,forgets,default,0.0
+Division Mixed Fractions,prior,default,0.11636653946774572
+Division Mixed Fractions,learns,default,0.0193144699582279
+Division Mixed Fractions,guesses,default,0.09572450834843667
+Division Mixed Fractions,slips,default,0.4327160032960276
+Division Mixed Fractions,forgets,default,0.0
+Division Proper Fractions,prior,default,0.35247093026870296
+Division Proper Fractions,learns,default,0.9996467481800317
+Division Proper Fractions,guesses,default,0.018096055676800133
+Division Proper Fractions,slips,default,0.13534478355041552
+Division Proper Fractions,forgets,default,0.0
+Nets of 3D Objects,prior,default,0.44642734050607424
+Nets of 3D Objects,learns,default,0.0625208838409246
+Nets of 3D Objects,guesses,default,0.7509681833509586
+Nets of 3D Objects,slips,default,0.05854651326162008
+Nets of 3D Objects,forgets,default,0.0
+Multiplication Mixed Fractions,prior,default,0.1609271050522852
+Multiplication Mixed Fractions,learns,default,0.0011884933891116425
+Multiplication Mixed Fractions,guesses,default,0.05627013344594903
+Multiplication Mixed Fractions,slips,default,0.16703390394426615
+Multiplication Mixed Fractions,forgets,default,0.0
+Table,prior,default,0.6031000398922184
+Table,learns,default,0.9785308871157151
+Table,guesses,default,0.13127956710049138
+Table,slips,default,0.024748930473268357
+Table,forgets,default,0.0
+Percent Discount,prior,default,0.5079153789955185
+Percent Discount,learns,default,0.19633211691253014
+Percent Discount,guesses,default,0.1656412783863795
+Percent Discount,slips,default,0.27634898461244045
+Percent Discount,forgets,default,0.0
+X-Y Graph Reading,prior,default,0.2561749608229845
+X-Y Graph Reading,learns,default,0.09980406420942589
+X-Y Graph Reading,guesses,default,0.43857941442387993
+X-Y Graph Reading,slips,default,0.11216240288456304
+X-Y Graph Reading,forgets,default,0.0
+Choose an Equation from Given Information,prior,default,0.40210749781340405
+Choose an Equation from Given Information,learns,default,0.008807743779470419
+Choose an Equation from Given Information,guesses,default,0.0904021242203092
+Choose an Equation from Given Information,slips,default,0.30587302472467637
+Choose an Equation from Given Information,forgets,default,0.0
+Rate,prior,default,0.37886329663811086
+Rate,learns,default,0.23471353016725413
+Rate,guesses,default,0.4364011969657879
+Rate,slips,default,0.08471064974970588
+Rate,forgets,default,0.0
+Symbolization,prior,default,0.6032743936958775
+Symbolization,learns,default,0.1287084010240814
+Symbolization,guesses,default,0.11480737438669268
+Symbolization,slips,default,0.2629704301349837
+Symbolization,forgets,default,0.0
+Inverse Relations,prior,default,0.787128081513384
+Inverse Relations,learns,default,0.9984609320186163
+Inverse Relations,guesses,default,0.05597999030121827
+Inverse Relations,slips,default,0.15828263142370352
+Inverse Relations,forgets,default,0.0
+Quadratic Equation Solving,prior,default,0.1836384280757686
+Quadratic Equation Solving,learns,default,0.051181036181611954
+Quadratic Equation Solving,guesses,default,0.3678683207458252
+Quadratic Equation Solving,slips,default,0.015006488286715924
+Quadratic Equation Solving,forgets,default,0.0
+Sampling Techniques,prior,default,0.7363217610703099
+Sampling Techniques,learns,default,0.01600599053591081
+Sampling Techniques,guesses,default,0.058907881156670325
+Sampling Techniques,slips,default,0.21499098178605447
+Sampling Techniques,forgets,default,0.0
+Estimation,prior,default,0.7518552385705031
+Estimation,learns,default,0.1935891428423962
+Estimation,guesses,default,0.3906819946137344
+Estimation,slips,default,0.18742624461136603
+Estimation,forgets,default,0.0
+Percents,prior,default,0.47078235861150663
+Percents,learns,default,0.3956747044191661
+Percents,guesses,default,0.19387087488018778
+Percents,slips,default,0.16300743422948907
+Percents,forgets,default,0.0
+Stem and Leaf Plot,prior,default,0.6004111704882306
+Stem and Leaf Plot,learns,default,0.2886631985654981
+Stem and Leaf Plot,guesses,default,0.33407282734989985
+Stem and Leaf Plot,slips,default,0.028484269941438052
+Stem and Leaf Plot,forgets,default,0.0
+Circle Graph,prior,default,0.8180621967610571
+Circle Graph,learns,default,0.4650157000102985
+Circle Graph,guesses,default,0.6154314865292535
+Circle Graph,slips,default,0.07749962431896129
+Circle Graph,forgets,default,0.0
+Line of Best-Fit,prior,default,0.668813145383301
+Line of Best-Fit,learns,default,0.980249484750114
+Line of Best-Fit,guesses,default,0.03530549213424146
+Line of Best-Fit,slips,default,0.15160607130595496
+Line of Best-Fit,forgets,default,0.0
+Surface Area of 3D Objects,prior,default,0.49733110950276
+Surface Area of 3D Objects,learns,default,0.018154861575529594
+Surface Area of 3D Objects,guesses,default,0.42924276341376716
+Surface Area of 3D Objects,slips,default,0.035962647499807536
+Surface Area of 3D Objects,forgets,default,0.0
+Pattern Finding,prior,default,0.8344802348657503
+Pattern Finding,learns,default,0.4126167947569622
+Pattern Finding,guesses,default,0.20411806646563946
+Pattern Finding,slips,default,0.19214526911173324
+Pattern Finding,forgets,default,0.0
+Geometric Definitions,prior,default,0.862695636237062
+Geometric Definitions,learns,default,1.0
+Geometric Definitions,guesses,default,0.07880160277158353
+Geometric Definitions,slips,default,0.01897840018951697
+Geometric Definitions,forgets,default,0.0
+Mean-Median-Mode-Range Differentiation,prior,default,0.4308709854000947
+Mean-Median-Mode-Range Differentiation,learns,default,1.0
+Mean-Median-Mode-Range Differentiation,guesses,default,0.2533634316007599
+Mean-Median-Mode-Range Differentiation,slips,default,0.06872804415141241
+Mean-Median-Mode-Range Differentiation,forgets,default,0.0
+Factoring Polynomials Standard,prior,default,0.8956524081353829
+Factoring Polynomials Standard,learns,default,0.8081871085769581
+Factoring Polynomials Standard,guesses,default,0.6330975684429926
+Factoring Polynomials Standard,slips,default,0.026076751588482404
+Factoring Polynomials Standard,forgets,default,0.0
+Fraction Of,prior,default,0.36263697856475674
+Fraction Of,learns,default,0.514019200209831
+Fraction Of,guesses,default,0.6037411630177186
+Fraction Of,slips,default,0.03416647560016358
+Fraction Of,forgets,default,0.0
+Line Plot,prior,default,0.4128597145332228
+Line Plot,learns,default,0.12297514282431914
+Line Plot,guesses,default,0.43536470240970865
+Line Plot,slips,default,0.05146460599397876
+Line Plot,forgets,default,0.0
+Solve Quadratic Equations Using Factoring,prior,default,0.17404718706760436
+Solve Quadratic Equations Using Factoring,learns,default,1.0
+Solve Quadratic Equations Using Factoring,guesses,default,0.8833703839140699
+Solve Quadratic Equations Using Factoring,slips,default,0.021083021130213965
+Solve Quadratic Equations Using Factoring,forgets,default,0.0
+Square Roots,prior,default,0.7768258360027579
+Square Roots,learns,default,0.9744301588719014
+Square Roots,guesses,default,0.0535607394317278
+Square Roots,slips,default,0.14550382771395615
+Square Roots,forgets,default,0.0
+Interpreting Coordinate Graphs ,prior,default,0.2801060602223136
+Interpreting Coordinate Graphs ,learns,default,0.41344598614212974
+Interpreting Coordinate Graphs ,guesses,default,0.6019594834745228
+Interpreting Coordinate Graphs ,slips,default,0.07789532601677868
+Interpreting Coordinate Graphs ,forgets,default,0.0
+English and Metric Terminology,prior,default,0.4849397220055771
+English and Metric Terminology,learns,default,0.37569070667727245
+English and Metric Terminology,guesses,default,0.48323992873700133
+English and Metric Terminology,slips,default,0.04459523219278327
+English and Metric Terminology,forgets,default,0.0
+Comparing and Identifying Slope/Rate of Change,prior,default,0.6396620126712794
+Comparing and Identifying Slope/Rate of Change,learns,default,0.028151877317323333
+Comparing and Identifying Slope/Rate of Change,guesses,default,0.5018257713447779
+Comparing and Identifying Slope/Rate of Change,slips,default,0.02398200978265379
+Comparing and Identifying Slope/Rate of Change,forgets,default,0.0
+"Tree Diagrams, Lists for Counting",prior,default,0.7292151988929367
+"Tree Diagrams, Lists for Counting",learns,default,0.7814027023794768
+"Tree Diagrams, Lists for Counting",guesses,default,0.4824020423773138
+"Tree Diagrams, Lists for Counting",slips,default,0.13036531968915321
+"Tree Diagrams, Lists for Counting",forgets,default,0.0
+Algebraic Simplification,prior,default,0.8427029151082123
+Algebraic Simplification,learns,default,1.0
+Algebraic Simplification,guesses,default,0.24638911368449423
+Algebraic Simplification,slips,default,0.16556691340146884
+Algebraic Simplification,forgets,default,0.0
+Division Whole Numbers,prior,default,0.540823431172847
+Division Whole Numbers,learns,default,0.339745947752182
+Division Whole Numbers,guesses,default,0.41331703911836376
+Division Whole Numbers,slips,default,0.07392867866387537
+Division Whole Numbers,forgets,default,0.0
+Multiplication Division by Powers of 10,prior,default,0.5621631633635399
+Multiplication Division by Powers of 10,learns,default,0.46142880522800517
+Multiplication Division by Powers of 10,guesses,default,0.03977104668656725
+Multiplication Division by Powers of 10,slips,default,0.12895095299856563
+Multiplication Division by Powers of 10,forgets,default,0.0
+Solving System of Equation,prior,default,0.5903755266995984
+Solving System of Equation,learns,default,0.11109928488218233
+Solving System of Equation,guesses,default,0.028040042356247137
+Solving System of Equation,slips,default,0.5018789128673747
+Solving System of Equation,forgets,default,0.0
+Finding Ratios,prior,default,0.9430760310206443
+Finding Ratios,learns,default,0.0033366818099533927
+Finding Ratios,guesses,default,0.28289795318696026
+Finding Ratios,slips,default,0.1587850978727452
+Finding Ratios,forgets,default,0.0
+Bar Graph,prior,default,0.8771566644614247
+Bar Graph,learns,default,0.9976555334529263
+Bar Graph,guesses,default,0.09580881215476313
+Bar Graph,slips,default,0.031158368066718588
+Bar Graph,forgets,default,0.0
+Graphing Inequalities on a number line,prior,default,0.6801266543903836
+Graphing Inequalities on a number line,learns,default,0.09192985694609081
+Graphing Inequalities on a number line,guesses,default,0.36571138301402645
+Graphing Inequalities on a number line,slips,default,0.10488364418684971
+Graphing Inequalities on a number line,forgets,default,0.0
+Volume of 3D Objects,prior,default,0.4396434919058668
+Volume of 3D Objects,learns,default,0.03364302198728351
+Volume of 3D Objects,guesses,default,0.20454615768720202
+Volume of 3D Objects,slips,default,0.24061712633196344
+Volume of 3D Objects,forgets,default,0.0
+Line Symmetry,prior,default,0.5898584030314897
+Line Symmetry,learns,default,1.0
+Line Symmetry,guesses,default,0.035176135306230684
+Line Symmetry,slips,default,0.17679768365629314
+Line Symmetry,forgets,default,0.0
+Ordering Whole Numbers,prior,default,0.9178689542464044
+Ordering Whole Numbers,learns,default,0.674981300551455
+Ordering Whole Numbers,guesses,default,0.09700582158247083
+Ordering Whole Numbers,slips,default,0.10372606880148921
+Ordering Whole Numbers,forgets,default,0.0
+Writine Expression from Diagrams,prior,default,0.415101984059464
+Writine Expression from Diagrams,learns,default,0.5868316839931582
+Writine Expression from Diagrams,guesses,default,0.633182143624198
+Writine Expression from Diagrams,slips,default,0.05612289355278483
+Writine Expression from Diagrams,forgets,default,0.0
+Surface Area Pyramid,prior,default,0.3181665013823888
+Surface Area Pyramid,learns,default,1.0
+Surface Area Pyramid,guesses,default,0.19031146128167972
+Surface Area Pyramid,slips,default,0.06083544999105726
+Surface Area Pyramid,forgets,default,0.0
+Graphing Linear Equations,prior,default,0.7878081480519037
+Graphing Linear Equations,learns,default,0.635265982809319
+Graphing Linear Equations,guesses,default,0.9266177853814895
+Graphing Linear Equations,slips,default,0.0008487499405920304
+Graphing Linear Equations,forgets,default,0.0
+Elapsed Time,prior,default,0.5923629777477627
+Elapsed Time,learns,default,1.0
+Elapsed Time,guesses,default,0.8301657092671653
+Elapsed Time,slips,default,0.02380734332233198
+Elapsed Time,forgets,default,0.0
+Properties and Clasification of Pyramid,prior,default,0.7131573613642999
+Properties and Clasification of Pyramid,learns,default,1.0
+Properties and Clasification of Pyramid,guesses,default,0.5052309624939365
+Properties and Clasification of Pyramid,slips,default,0.1515502042350865
+Properties and Clasification of Pyramid,forgets,default,0.0
+Calculation with + - * /,prior,default,0.7197306280354215
+Calculation with + - * /,learns,default,0.97116791778709
+Calculation with + - * /,guesses,default,0.059142377640939214
+Calculation with + - * /,slips,default,0.04038669408300976
+Calculation with + - * /,forgets,default,0.0
+Odd and Even Number,prior,default,0.55847714654775
+Odd and Even Number,learns,default,1.0
+Odd and Even Number,guesses,default,0.6883523451604427
+Odd and Even Number,slips,default,0.00941413816694126
+Odd and Even Number,forgets,default,0.0
+Reading a Ruler or Scale,prior,default,0.41263825475966015
+Reading a Ruler or Scale,learns,default,0.5129088344609857
+Reading a Ruler or Scale,guesses,default,0.6172349089564715
+Reading a Ruler or Scale,slips,default,0.009490734928880815
+Reading a Ruler or Scale,forgets,default,0.0

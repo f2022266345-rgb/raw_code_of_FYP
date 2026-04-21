@@ -15,6 +15,12 @@ const InitialProfile = sequelize.define(
       allowNull: false,
       unique: true,
     },
+    // Persistent Learner ID returned by FastAPI
+    persistentLearnerId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: "persistent_learner_id",
+    },
     userId: {
       type: DataTypes.UUID,
       allowNull: false,
@@ -50,6 +56,25 @@ const InitialProfile = sequelize.define(
       type: DataTypes.JSONB,
       allowNull: false,
       field: "ai_prediction",
+    },
+    // Extracted ML outputs stored as flat columns for easy querying
+    bloomLevel: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 1,
+      field: "bloom_level",
+    },
+    languageBarrierRisk: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      defaultValue: 0.2,
+      field: "language_barrier_risk",
+    },
+    activeAgents: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: true,
+      defaultValue: ["academic"],
+      field: "active_agents",
     },
   },
   {

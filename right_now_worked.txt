@@ -1,0 +1,13 @@
+What's Actually Working
+Feature	Status
+User signup / login with JWT	✅ Complete
+Onboarding Steps 1–3 (form + storage)	✅ Complete
+ML initial profile prediction	✅ Working
+BKT parameters loaded (190 skills)	✅ Working
+Observation logging (all 10 fields)	✅ Best-implemented feature
+Dashboard API (GET /api/dashboard)	✅ Returns data
+Agent UI pages (all 5 agents)	✅ Built
+Trend engine logic	✅ Coded correctly
+
+
+

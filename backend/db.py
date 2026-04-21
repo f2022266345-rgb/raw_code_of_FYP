@@ -131,14 +131,3 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
-
-        # Verify these exist in your SessionORM class in db.py
-name: Mapped[str | None] = mapped_column(String(255))
-major: Mapped[str | None] = mapped_column(String(255))
-university: Mapped[str | None] = mapped_column(String(255))
-stress_level: Mapped[int | None] = mapped_column(Integer)
-current_phase: Mapped[str | None] = mapped_column(String(100))
-academic_confidence: Mapped[int | None] = mapped_column(Integer)
-social_battery: Mapped[str | None] = mapped_column(String(50))
-current_mood: Mapped[str | None] = mapped_column(String(100))
-academic_result: Mapped[str | None] = mapped_column(Text)

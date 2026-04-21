@@ -6,32 +6,45 @@ import AuthRoutes from "./routes/authRoutes.js";
 import OnboardingRoutes from "./routes/OnboardingRoutes.js";
 import DashboardRoutes from "./routes/dashboardRoutes.js";
 import ObservationsRoutes from "./routes/observationsRoutes.js";
+import BktRoutes from "./routes/bktRoutes.js";
+import ChatRoutes from "./routes/chatRoutes.js";
 
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 4000;
 
 const corsOptions = {
-  // Allow your frontend URL
-  origin: "http://localhost:3000",
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  // This is the important part: allow Authorization header
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 };
 
 app.use(cors(corsOptions));
-
 app.use(express.json());
 
+// Auth
 app.use("/api/auth", AuthRoutes);
-app.use("/api/onboarding", OnboardingRoutes);
-app.use("/api/intitalproflling", OnboardingRoutes);
+
+// Onboarding (correct spelling + legacy typo alias for backward-compat)
+app.use("/api/initial-profiling", OnboardingRoutes);
+app.use("/api/intitalproflling", OnboardingRoutes); // legacy alias — keep until frontend updated
+
+// Dashboard
 app.use("/api/dashboard", DashboardRoutes);
+
+// Observations
 app.use("/api/observations", ObservationsRoutes);
+
+// BKT Skill Mastery
+app.use("/api/bkt", BktRoutes);
+
+// AI Agent Chat
+app.use("/api/chat", ChatRoutes);
+
 app.get("/", (_req, res) => {
-  res.json({ message: "Backend is running" });
+  res.json({ message: "AI Academy Backend is running", version: "2.0.0" });
 });
 
 app.get("/health", async (_req, res) => {
@@ -48,34 +61,34 @@ app.get("/health", async (_req, res) => {
 });
 
 /**
- * Starts the Express server after ensuring Database connectivity
+ * Starts the Express server after ensuring Database connectivity.
  */
 async function startServer() {
   const BORDER = "------------------------------------------";
 
   try {
-    console.log("\n🚀 Initializing AI Academy Backend...");
+    console.log("\n🚀 Initializing AI Academy Backend v2.0...");
 
-    // 1. Database Connection
     await sequelize.authenticate();
 
-    // 2. Sync Models (Consider { alter: true } for dev, but be careful in prod)
-    await sequelize.sync();
+    // alter: true safely adds new columns without dropping existing data
+    await sequelize.sync({ alter: true });
 
     console.log("Database: PostgreSQL connection established.");
+    console.log("Database: Schema synced (alter mode).");
 
-    // 3. Start Listening
     const server = app.listen(PORT, () => {
       console.log(`
 ${BORDER}
 ✅ SERVER IS LIVE
 📱 URL: http://localhost:${PORT}
 🛠️  Environment: ${process.env.NODE_ENV || "development"}
+📚 BKT endpoint: /api/bkt/skills
+💬 Chat endpoint: /api/chat
 ${BORDER}
       `);
     });
 
-    // Handle sudden shutdowns gracefully
     process.on("SIGTERM", () => {
       console.log("Shutting down gracefully...");
       server.close(() => process.exit(0));

@@ -17,6 +17,13 @@ const User = sequelize.define(
       allowNull: false,
       unique: true,
     },
+    // 3. Persistent Learner ID (from ML backend, stable across sessions)
+    persistentLearnerId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      unique: true,
+      field: "persistent_learner_id",
+    },
     name: {
       type: DataTypes.STRING,
       allowNull: false,
