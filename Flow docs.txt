@@ -905,3 +905,10 @@ Testing strategy (Jest, E2E)?
 Deployment checklist?
 FYP Report structure aligned with this roadmap?
 This is a comprehensive, production-ready roadmap. Your FYP is well-scoped and achievable in 12 weeks. 🚀
+
+
+
+
+
+- > chat histoy memory show in dashboard in SUMMARY
+- > all agent can interact with the user relevent tooling system so that it act like agent 

@@ -4,7 +4,11 @@ import os
 from datetime import datetime, timezone
 from typing import Generator
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, text
+from sqlalchemy import (
+    Boolean, DateTime, Float, ForeignKey, Integer, JSON,
+    String, Text, UniqueConstraint, create_engine, text,
+)
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 from pgvector.sqlalchemy import Vector
 
@@ -116,6 +120,111 @@ class KnowledgeChunkORM(Base):
 
 engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+
+# ============================================================================
+# ORM Mirrors of Sequelize-managed tables
+# (FastAPI reads these tables; Sequelize owns schema creation via alter:true)
+# These classes are read-only from FastAPI's perspective — do NOT call
+# Base.metadata.create_all() for these; Sequelize already handles that.
+# ============================================================================
+
+class BktSkillMasteryORM(Base):
+    """
+    Mirror of `bkt_skill_mastery` table (created by Sequelize BktSkillMastery model).
+    FastAPI uses this for Task 1 context retrieval.
+    """
+    __tablename__ = "bkt_skill_mastery"
+    __table_args__ = {"extend_existing": True}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    skill_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    p_mastery: Mapped[float] = mapped_column(Float, nullable=False, default=0.3)
+    p_init: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p_transit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p_guess: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p_slip: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p_forget: Mapped[float | None] = mapped_column(Float, nullable=True)
+    practice_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_practiced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column("createdAt", DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column("updatedAt", DateTime(timezone=True), nullable=True)
+
+
+class InitialProfileORM(Base):
+    """
+    Mirror of `initial_profiles` table (created by Sequelize InitialProfile model).
+    FastAPI reads bloomLevel, languageBarrierRisk, learningPreferences.
+    """
+    __tablename__ = "initial_profiles"
+    __table_args__ = {"extend_existing": True}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    persistent_learner_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    bloom_level: Mapped[int | None] = mapped_column(Integer, nullable=True, default=1)
+    language_barrier_risk: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.2)
+    # JSONB columns — SQLAlchemy reads these as Python dicts
+    learning_preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    user_profile: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ai_prediction: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    active_agents: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column("createdAt", DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column("updatedAt", DateTime(timezone=True), nullable=True)
+
+
+class InteractionLogORM(Base):
+    """
+    Mirror of `interaction_logs` table (created by Sequelize InteractionLog model).
+    FastAPI reads latest sentimentLabel + mood for emotional state detection.
+    """
+    __tablename__ = "interaction_logs"
+    __table_args__ = {"extend_existing": True}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    event_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    page_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sentiment_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mood: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hints_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    response_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    time_on_page_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column("createdAt", DateTime(timezone=True), nullable=True)
+
+
+class AgentMemoryORM(Base):
+    """
+    NEW TABLE — `agent_memory`
+    Cross-agent shared memory for real-time emotional state synchronization.
+
+    The Wellness Agent WRITES here (mood, sentiment updates).
+    The Academic Agent READS the latest entry for this user to adjust tone.
+
+    This is the "Shared Brain" (Task 3 — Memory Synchronization).
+    Created by FastAPI's init_db(); not managed by Sequelize.
+    """
+    __tablename__ = "agent_memory"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    # Which agent last wrote this entry
+    source_agent: Mapped[str] = mapped_column(String(50), nullable=False)  # wellness | academic | coordinator
+    # Emotional state fields (written by Wellness Agent)
+    mood: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sentiment_label: Mapped[str | None] = mapped_column(String(50), nullable=True)  # positive | neutral | negative
+    sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True)   # [-1, 1]
+    # Cognitive state from trend engine (written by Academic Agent)
+    cognitive_state: Mapped[str | None] = mapped_column(String(100), nullable=True)  # FLOW_STATE | CRITICAL_STRUGGLE ...
+    # Free-form JSON for agent-specific payload
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
 
 
 def init_db() -> None:

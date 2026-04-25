@@ -1,6 +1,8 @@
 import db from "../model/index.js";
 
 const { User, InitialProfile, BktSkillMastery } = db;
+const FASTAPI_BASE_URL =
+  process.env.FASTAPI_BASE_URL || "http://localhost:8000";
 
 const onboardingController = async (req, res) => {
   console.log("Received onboarding data:", req.body);
@@ -33,7 +35,7 @@ const onboardingController = async (req, res) => {
 
     // ── Step 1: Call FastAPI for ML predictions ───────────────────────────────
     const fastApiResponse = await fetch(
-      "http://localhost:8000/api/predict/initial-profile",
+      `${FASTAPI_BASE_URL}/api/predict/initial-profile`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,14 +58,17 @@ const onboardingController = async (req, res) => {
     }
 
     const predictionData = await fastApiResponse.json();
-    console.log("FastAPI prediction result:", predictionData);
+    console.log("\n\n\n\n\nFastAPI prediction result:", predictionData);
 
     const prediction = predictionData?.prediction || {};
     const userProfile = prediction.user_profile || {};
     const aiPrediction = prediction.ai_prediction || {};
     const bloomLevel = prediction.bloom_level ?? 1;
     const languageBarrierRisk = prediction.language_barrier_risk ?? 0.2;
-    const activeAgents = prediction.active_agents ?? ["academic", "coordinator"];
+    const activeAgents = prediction.active_agents ?? [
+      "academic",
+      "coordinator",
+    ];
     const persistentLearnerId = predictionData.persistentLearnerId;
 
     // ── Step 2: Save onboarding profile to DB ─────────────────────────────────
@@ -89,13 +94,15 @@ const onboardingController = async (req, res) => {
     // ── Step 4: Seed BKT skill mastery rows for this user ─────────────────────
     // Fetch the full skill list from FastAPI (190 skills with BKT params)
     try {
-      const skillsResponse = await fetch("http://localhost:8000/api/bkt/skills");
+      const skillsResponse = await fetch(`${FASTAPI_BASE_URL}/api/bkt/skills`);
       if (skillsResponse.ok) {
         const skillsData = await skillsResponse.json();
         const skills = skillsData.skills || [];
 
         // Check if BKT rows already exist for this user
-        const existingCount = await BktSkillMastery.count({ where: { userId } });
+        const existingCount = await BktSkillMastery.count({
+          where: { userId },
+        });
 
         if (existingCount === 0 && skills.length > 0) {
           // Bulk insert all skills — initial mastery = p_init from CSV
@@ -121,12 +128,17 @@ const onboardingController = async (req, res) => {
           }
           console.log(`✅ Seeded ${rows.length} BKT skills for user ${userId}`);
         } else {
-          console.log(`BKT skills already seeded for user ${userId} (${existingCount} rows)`);
+          console.log(
+            `BKT skills already seeded for user ${userId} (${existingCount} rows)`,
+          );
         }
       }
     } catch (bktError) {
       // BKT seeding failure is non-fatal — log and continue
-      console.error("⚠️ BKT skill seeding failed (non-fatal):", bktError.message);
+      console.error(
+        "⚠️ BKT skill seeding failed (non-fatal):",
+        bktError.message,
+      );
     }
 
     // ── Step 5: Return consolidated response ──────────────────────────────────

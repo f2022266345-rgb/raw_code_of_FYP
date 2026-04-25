@@ -1,0 +1,146 @@
+Implementation Report - 2026-04-22
+Author: GitHub Copilot (GC)
+
+Scope completed across:
+1) FYP_Project (frontend)
+2) backend_express (Node/Express)
+3) backend (FastAPI/Python)
+
+------------------------------------------------------------
+1) Dashboard 404 issue fixed
+------------------------------------------------------------
+Problem:
+- Frontend dashboard called GET /api/dashboard
+- Express route only exposed GET /api/dashboard/me
+- Result: 404 on /dashboard page even when Express was running.
+
+Changes:
+- Added backward-compatible route alias in Express:
+  backend_express/routes/dashboardRoutes.js
+  - Added GET /api/dashboard -> getMyDashboard
+  - Kept GET /api/dashboard/me
+- Updated frontend fetch endpoint:
+  FYP_Project/app/dashboard/page.tsx
+  - Changed fetch URL to /api/dashboard/me
+  - Improved status-based error message handling (401/403/404).
+
+------------------------------------------------------------
+2) Gemini SDK migration (google.generativeai -> google.genai)
+------------------------------------------------------------
+Problem:
+- Deprecated package warning for google.generativeai.
+
+Changes:
+- Migrated Gemini client integration:
+  backend/services/gemini_agent.py
+  - Replaced import google.generativeai with from google import genai
+  - Client initialization now uses genai.Client(api_key=...)
+  - Generation now uses client.models.generate_content(...)
+  - Added GenerateContentConfig via google.genai.types
+- Updated dependency:
+  backend/requirements.txt
+  - Replaced google-generativeai with google-genai
+
+------------------------------------------------------------
+3) SQL transaction-abort cascade and ORM schema mismatch fixed
+------------------------------------------------------------
+Problems:
+- BKT query failed first due created_at vs createdAt mismatch.
+- After first SQL failure, DB session remained aborted, causing all later queries to fail.
+
+Changes:
+- Corrected SQLAlchemy mirror column mappings to Sequelize timestamp names:
+  backend/db.py
+  - bkt_skill_mastery: createdAt/updatedAt mapped
+  - initial_profiles: createdAt/updatedAt mapped
+  - interaction_logs: createdAt mapped
+- Added rollback safety after each failed query:
+  backend/services/context_retriever.py
+  - db.rollback() in each exception block (BKT/Profile/Interaction/AgentMemory)
+- Added rollback in pgvector fallback retrieval failure path:
+  backend/services/gemini_agent.py
+
+Result:
+- Prevents "current transaction is aborted" cascade.
+- Resolves bkt_skill_mastery.created_at undefined-column mismatch in FastAPI reads.
+
+------------------------------------------------------------
+4) Agent chat relevance + coordinator orchestration support
+------------------------------------------------------------
+Goal:
+- Ensure each agent chats with relevant scope while coordinator can use full student context.
+
+Changes:
+- Added agent-type-aware prompt directives in state engine:
+  backend/services/state_engine.py
+  - Added _agent_directive(agent_type)
+  - Academic: curriculum/mastery focus
+  - Wellness: emotional coping/support focus
+  - Social: collaboration/community focus
+  - Coordinator: full-context orchestration
+  - Directive appended to system instruction before Gemini call.
+- Passed agent_type into prompt builder:
+  backend/routers/agent_router.py
+
+------------------------------------------------------------
+5) Persist chat history to DB and expose via API
+------------------------------------------------------------
+Goal:
+- Store chat interactions reliably and show chat history in frontend.
+
+Changes:
+- Server-side chat persistence added:
+  backend_express/controllers/chatController.js
+  - Stores both user and assistant chat rows into interaction_logs
+  - eventType: chat_user / chat_assistant
+  - includes metadata: agent, skillName, persona/state when available
+  - also logs fallback assistant response when FastAPI fails
+- New history endpoint:
+  backend_express/routes/chatRoutes.js
+  - GET /api/chat/history
+  backend_express/controllers/chatController.js
+  - getChatHistory() returns chronological chat list for authenticated user
+
+------------------------------------------------------------
+6) Dashboard summary now includes chat history memory
+------------------------------------------------------------
+Changes:
+- backend_express/controllers/dashboardController.js
+  - Added chatHistorySummary (counts, last message, last agent)
+  - Added chatHistory payload (recent chat sequence)
+- FYP_Project/lib/store.ts
+  - Added chatHistorySummary to dashboard store model + hydration
+- FYP_Project/app/dashboard/page.tsx
+  - Hydrates chatHistorySummary from dashboard API
+- FYP_Project/components/dashboard/activity-timeline.tsx
+  - Displays Chat History Summary card section
+
+------------------------------------------------------------
+7) Frontend agent chat wiring improvements
+------------------------------------------------------------
+Changes:
+- FYP_Project/components/dashboard/chat-widget.tsx
+  - Uses selectedChatAgent from store (not hardcoded coordinator)
+  - Sends selected agentType to /api/chat
+  - Keeps observation round-trip telemetry
+- FYP_Project/components/agents/agent-chat.tsx
+  - Replaced simulated response mode with real /api/chat call
+  - Resolves agent type from agent name
+  - Uses optional local fallback response list if API fails
+- FYP_Project/app/dashboard/chat-history/page.tsx
+  - Replaced static mock sessions with live API-driven history from /api/chat/history
+  - Supports search + agent filtering
+
+------------------------------------------------------------
+Run/verification notes
+------------------------------------------------------------
+- Dashboard endpoint mismatch resolved by route alias + frontend endpoint correction.
+- Express chat API now persists chat records, enabling real history.
+- FastAPI context retrieval is now resilient to single-query failures.
+- Gemini integration switched to the non-deprecated SDK path in code and requirements.
+
+Operational note:
+- You must install updated Python deps in backend env after requirements change:
+  pip install -r requirements.txt
+
+End of report.

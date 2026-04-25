@@ -1,14 +1,24 @@
 import joblib
 import numpy as np
 import os
+import warnings
+
+try:
+    from sklearn.exceptions import InconsistentVersionWarning
+except Exception:
+    InconsistentVersionWarning = Warning
 
 # Load the Scikit-Learn model and Encoders
 try:
     model_path = os.path.join(os.path.dirname(__file__), 'student_model.pkl')
     encoder_path = os.path.join(os.path.dirname(__file__), 'encoders.pkl')
-    
-    student_model = joblib.load(model_path)
-    encoders = joblib.load(encoder_path)
+
+    # The serialized artifacts were trained on an older sklearn version.
+    # Keep runtime stable by loading them while suppressing known version-noise.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
+        student_model = joblib.load(model_path)
+        encoders = joblib.load(encoder_path)
 except Exception as e:
     print(f"Warning: ML Models not loaded. Using fallback logic. Error: {e}")
     student_model = None
@@ -128,6 +138,8 @@ def predict_initial_profile(data_dict: dict) -> dict:
         "languagePreference": pref.get("languagePreference", "english-only"),
     }
 
+    print("Now Build Profile for ML Prediction: ", profile)
+
     # ── 9. ML Prediction ────────────────────────────────────────────────────────
     success_probability = 0.5 + (academic_confidence / 200)  # heuristic fallback
     status = "At Risk"
@@ -158,6 +170,8 @@ def predict_initial_profile(data_dict: dict) -> dict:
                 academic_confidence,
                 academic_confidence  # weighted_score proxy
             ]])
+
+            print("Features for ML Model: ", features)
 
             success_probability = float(student_model.predict_proba(features)[0][1])
             status = "Pass" if success_probability > 0.5 else "At Risk"

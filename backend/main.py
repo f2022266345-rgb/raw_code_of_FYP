@@ -4,6 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from uuid import uuid4
@@ -11,8 +12,12 @@ from uuid import uuid4
 from ai_service import predict_initial_profile
 from services.trend_engine import analyze_student_state
 from services.chat_service import generate_agent_response
+from routers.agent_router import router as agent_router
 
 logger = logging.getLogger(__name__)
+
+# Load backend/.env at process start so Gemini and DB settings are available.
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # BKT Parameter Store
@@ -112,6 +117,14 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.exception("Failed to load BKT parameters: %s", exc)
 
+    # Ensure agent_memory table exists (FastAPI-managed, not Sequelize)
+    try:
+        from db import init_db
+        init_db()
+        logger.info("FastAPI DB tables ensured (agent_memory etc.)")
+    except Exception as exc:
+        logger.warning("init_db warning (non-fatal): %s", exc)
+
     yield
 
     skill_params.clear()
@@ -134,6 +147,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── State-Driven Context Injector (new agent orchestration routes) ──────────
+app.include_router(agent_router)
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +196,7 @@ async def predict_initial_profile_endpoint(payload: InitialProfilingRequest):
     """
     try:
         prediction_result = predict_initial_profile(payload.dict())
+        print("Prediction Result: ",prediction_result)
         return {
             "persistentLearnerId": str(uuid4()),
             "prediction": prediction_result,

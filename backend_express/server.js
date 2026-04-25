@@ -61,6 +61,53 @@ app.get("/health", async (_req, res) => {
 });
 
 /**
+ * Handles legacy schema drift where bkt_skill_mastery.user_id was created as VARCHAR.
+ * The FK to users.userId requires UUID on both sides.
+ */
+async function normalizeLegacyBktUserIdColumn() {
+  const [rows] = await sequelize.query(`
+    SELECT data_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'bkt_skill_mastery'
+      AND column_name = 'user_id'
+    LIMIT 1;
+  `);
+
+  if (!rows?.length) {
+    return;
+  }
+
+  const currentType = rows[0].data_type;
+  if (currentType === "uuid") {
+    return;
+  }
+
+  if (currentType === "character varying" || currentType === "text") {
+    console.log(
+      "Database: Normalizing bkt_skill_mastery.user_id from text to UUID...",
+    );
+
+    await sequelize.query(
+      `ALTER TABLE "bkt_skill_mastery" DROP CONSTRAINT IF EXISTS "bkt_skill_mastery_user_id_fkey";`,
+    );
+
+    // Remove legacy rows that cannot be cast to UUID.
+    await sequelize.query(`
+      DELETE FROM "bkt_skill_mastery"
+      WHERE "user_id" IS NULL
+         OR "user_id" !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+    `);
+
+    await sequelize.query(`
+      ALTER TABLE "bkt_skill_mastery"
+      ALTER COLUMN "user_id" TYPE UUID
+      USING "user_id"::uuid;
+    `);
+  }
+}
+
+/**
  * Starts the Express server after ensuring Database connectivity.
  */
 async function startServer() {
@@ -70,6 +117,8 @@ async function startServer() {
     console.log("\n🚀 Initializing AI Academy Backend v2.0...");
 
     await sequelize.authenticate();
+
+    await normalizeLegacyBktUserIdColumn();
 
     // alter: true safely adds new columns without dropping existing data
     await sequelize.sync({ alter: true });
