@@ -1,6 +1,7 @@
 import db from "../model/index.js";
+import { processNewInteractions } from "../services/cognitiveStateService.js";
 
-const { InteractionLog } = db;
+const { InteractionLog, StudentInteraction } = db;
 
 const POSITIVE_WORDS = [
   "good",
@@ -108,12 +109,74 @@ const normalizeEvent = (payload, userId) => {
   };
 };
 
+const toStudentInteraction = (event) => {
+  const metadata = event?.metadata || {};
+  const hintsRequested = Number.isFinite(Number(event?.hintsUsed))
+    ? Number(event.hintsUsed)
+    : null;
+
+  return {
+    userId: event.userId,
+    sessionId: event.sessionId || metadata?.sessionId || null,
+    eventType: event.eventType || "unknown",
+    contentId: metadata?.contentId || metadata?.skillName || null,
+    agentType: metadata?.agent || metadata?.agentType || null,
+    correctness: typeof event.correct === "boolean" ? event.correct : null,
+    hintsRequested,
+    attempts: Number.isFinite(Number(event.attempts))
+      ? Number(event.attempts)
+      : null,
+    responseTimeMs: Number.isFinite(Number(event.responseTimeMs))
+      ? Number(event.responseTimeMs)
+      : null,
+    sessionTimeSpentMs: Number.isFinite(Number(event.timeOnPageMs))
+      ? Number(event.timeOnPageMs)
+      : null,
+    messageText: event.chatText || null,
+    sentimentScore: Number.isFinite(Number(event.sentimentScore))
+      ? Number(event.sentimentScore)
+      : null,
+    sentimentLabel: event.sentimentLabel || null,
+    metadata,
+    occurredAt: event.occurredAt || new Date(),
+  };
+};
+
+const persistStudentInteractions = async (events = []) => {
+  if (!events.length) return;
+
+  const mapped = events.map(toStudentInteraction);
+  await StudentInteraction.bulkCreate(mapped);
+
+  // Explicitly log hint_requested when hints are used in any event.
+  const hintRows = [];
+  for (const row of mapped) {
+    if (
+      Number.isFinite(Number(row.hintsRequested)) &&
+      Number(row.hintsRequested) > 0
+    ) {
+      hintRows.push({
+        ...row,
+        eventType: "hint_requested",
+      });
+    }
+  }
+
+  if (hintRows.length > 0) {
+    await StudentInteraction.bulkCreate(hintRows);
+  }
+
+  await processNewInteractions(mapped);
+};
+
 const logObservation = async (req, res) => {
   try {
     const { userId } = req.user;
     const normalized = normalizeEvent(req.body, userId);
 
     const created = await InteractionLog.create(normalized);
+    await persistStudentInteractions([normalized]);
+
     return res.status(201).json({
       message: "Observation logged",
       eventId: created.eventId,
@@ -139,6 +202,8 @@ const logObservationBatch = async (req, res) => {
     );
 
     await InteractionLog.bulkCreate(normalized);
+    await persistStudentInteractions(normalized);
+
     return res.status(201).json({
       message: "Observation batch logged",
       count: normalized.length,
@@ -146,6 +211,49 @@ const logObservationBatch = async (req, res) => {
   } catch (error) {
     console.error("Observation batch log error:", error);
     return res.status(500).json({ message: "Failed to log observation batch" });
+  }
+};
+
+const logHintRequested = async (req, res) => {
+  try {
+    const { userId, sessionId } = req.user;
+    const {
+      contentId = null,
+      agentType = null,
+      pagePath = null,
+      metadata = {},
+    } = req.body || {};
+
+    const payload = {
+      userId,
+      sessionId: req.body?.sessionId || sessionId || null,
+      eventType: "hint_requested",
+      pagePath,
+      hintsUsed: 1,
+      attempts: Number.isFinite(Number(req.body?.attempts))
+        ? Number(req.body.attempts)
+        : null,
+      responseTimeMs: Number.isFinite(Number(req.body?.responseTimeMs))
+        ? Number(req.body.responseTimeMs)
+        : null,
+      metadata: {
+        ...metadata,
+        contentId,
+        agent: agentType,
+      },
+      occurredAt: new Date(),
+    };
+
+    const logRow = await InteractionLog.create(payload);
+    await persistStudentInteractions([payload]);
+
+    return res.status(201).json({
+      message: "Hint request logged",
+      eventId: logRow.eventId,
+    });
+  } catch (error) {
+    console.error("Hint log error:", error);
+    return res.status(500).json({ message: "Failed to log hint request" });
   }
 };
 
@@ -261,5 +369,6 @@ const getObservationSummary = async (req, res) => {
 export default {
   logObservation,
   logObservationBatch,
+  logHintRequested,
   getObservationSummary,
 };

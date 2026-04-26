@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.post("/log", requireAuth, observationsController.logObservation);
 router.post("/batch", requireAuth, observationsController.logObservationBatch);
+router.post("/hint", requireAuth, observationsController.logHintRequested);
 router.get(
   "/summary",
   requireAuth,

@@ -129,26 +129,117 @@ def _extract_reply_text(response) -> str:
     return "".join(parts).strip()
 
 
+def _response_hit_token_limit(response) -> bool:
+    """Detects if Gemini likely stopped due to output token limit."""
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        for candidate in candidates:
+            reason = getattr(candidate, "finish_reason", None)
+            reason_name = getattr(reason, "name", None) or str(reason)
+            normalized = str(reason_name).upper()
+            # Common values observed across SDK variants.
+            if "MAX_TOKENS" in normalized or "TOKEN" in normalized or "LENGTH" in normalized:
+                return True
+            # Some SDK builds expose enum ints where 2 maps to MAX_TOKENS.
+            if isinstance(reason, (int, float)) and int(reason) == 2:
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def _looks_incomplete(text: str) -> bool:
-    """Heuristic check for truncated/mid-sentence model output."""
-    if not text:
+    """
+    REVISED: Only flags truly broken responses. 
+    A short response (12+ chars) is now considered valid.
+    """
+    if not text or len(text.strip()) < 5:  # Reduced from 12 to 5
         return True
+    
     stripped = text.strip()
-    if len(stripped) < 12:
+    # Only flag if it ends on a dangling connector
+    if stripped.endswith((",", "and", "with", "the", "a")):
         return True
 
-    if stripped.endswith((",", ";", ":", "-", "(", "[")):
-        return True
-
-    last_word_match = re.search(r"([A-Za-z]+)\W*$", stripped)
-    last_word = (last_word_match.group(1).lower() if last_word_match else "")
-    if last_word in {"and", "or", "but", "so", "because", "if", "then", "that", "which", "who"}:
-        return True
-
+    # Check for terminal punctuation
     if not re.search(r"[.!?]['\")\]]*$", stripped):
         return True
 
     return False
+
+
+def _normalize_history_entries(entries, source: str) -> List[dict]:
+    if not isinstance(entries, list):
+        return []
+
+    normalized = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content", "")).strip()
+        if not content:
+            continue
+        role = "assistant" if str(item.get("role", "")).lower() == "assistant" else "user"
+        normalized.append({"role": role, "content": content, "source": source})
+    return normalized
+
+
+def _build_context_window(
+    chat_history,
+    database_chat_history,
+    max_turns: int = 16,
+) -> str:
+    merged = (
+        _normalize_history_entries(database_chat_history, "database")
+        + _normalize_history_entries(chat_history, "session")
+    )
+    if not merged:
+        return ""
+
+    window = merged[-max_turns:]
+    lines = []
+    for item in window:
+        speaker = "Assistant" if item["role"] == "assistant" else "Student"
+        source_label = "DB" if item["source"] == "database" else "Session"
+        lines.append(f"[{source_label}] {speaker}: {item['content']}")
+    return "\n".join(lines)
+
+
+def _summarize_history_with_ai(
+    gemini_model,
+    model_module,
+    context_window: str,
+    user_message: str,
+) -> str:
+    if not context_window:
+        return ""
+
+    summary_prompt = (
+        "You summarize tutoring conversations for context carryover. "
+        "Write 4-6 concise bullet points covering:\n"
+        "1) Current topic and goal\n"
+        "2) What student already understands\n"
+        "3) What is still confusing\n"
+        "4) Agreed next step\n"
+        "5) Emotional/cognitive cues if present\n\n"
+        f"Current user message: {user_message}\n\n"
+        "Conversation window:\n"
+        f"{context_window}"
+    )
+
+    try:
+        response = gemini_model.generate_content(
+            summary_prompt,
+            generation_config=model_module.types.GenerationConfig(
+                temperature=0.2,
+                max_output_tokens=220,
+                top_p=0.9,
+            ),
+        )
+        return _extract_reply_text(response)
+    except Exception as exc:
+        logger.warning("History summarization failed (non-fatal): %s", exc)
+        return ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -210,6 +301,8 @@ def call_gemini(
     needs_pgvector: bool = False,
     skill_name: str = "",
     db=None,
+    chat_history=None,
+    database_chat_history=None,
 ) -> str:
     """
     Task 4 — Token Optimization Protocol.
@@ -244,9 +337,7 @@ def call_gemini(
         if scaffolding_text:
             scaffolding = scaffolding_text
 
-    # ── Build final prompt (Task 4 format) ────────────────────────────────
-    # Format: System Instruction \n [Scaffolding?] \n User: <message>
-    full_prompt = f"{optimized_instruction}{scaffolding}\n\nStudent: {user_message}"
+    context_window = _build_context_window(chat_history, database_chat_history)
 
     logger.debug(
         "Gemini prompt:\n--- SYSTEM ---\n%s\n--- USER ---\n%s",
@@ -260,46 +351,67 @@ def call_gemini(
     try:
         for model_name in _iter_model_candidates():
             try:
-                # Initialize the model
                 gemini_model = model.GenerativeModel(model_name)
+
+                history_summary = _summarize_history_with_ai(
+                    gemini_model=gemini_model,
+                    model_module=model,
+                    context_window=context_window,
+                    user_message=user_message,
+                )
+
+                context_block = ""
+                if context_window:
+                    context_block += f"\n\nConversation Context Window:\n{context_window}"
+                if history_summary:
+                    context_block += f"\n\nAI Summary of Ongoing Conversation:\n{history_summary}"
+
+                full_prompt = (
+                    f"{optimized_instruction}{scaffolding}{context_block}\n\n"
+                    f"Current Student Message: {user_message}"
+                )
                 
-                # Generate content with token limits
+                # Temperature 0.7 allows for more natural flow than 0.4
                 response = gemini_model.generate_content(
                     full_prompt,
                     generation_config=model.types.GenerationConfig(
-                        temperature=0.6,
-                        max_output_tokens=512,
-                        top_p=0.9,
+                        temperature=0.7,
+                        max_output_tokens=1200,
+                        top_p=0.95,
                     ),
                 )
 
                 reply = _extract_reply_text(response)
-                if reply and _looks_incomplete(reply):
-                    logger.warning(
-                        "Gemini output looked incomplete; retrying once for completion. model=%s reply=%r",
-                        model_name,
-                        reply,
-                    )
-                    retry_prompt = (
-                        f"{full_prompt}\n\n"
-                        "Important: Return a complete response in full sentences. "
-                        "Do not stop mid-sentence."
-                    )
-                    retry_response = gemini_model.generate_content(
-                        retry_prompt,
-                        generation_config=model.types.GenerationConfig(
-                            temperature=0.4,
-                            max_output_tokens=640,
-                            top_p=0.9,
-                        ),
-                    )
-                    retry_reply = _extract_reply_text(retry_response)
-                    if retry_reply:
-                        reply = retry_reply
 
-                if reply:
-                    logger.info("Gemini response generated with model: %s", model_name)
+                # If model stopped due to token budget, request continuation and merge.
+                if reply and _response_hit_token_limit(response):
+                    try:
+                        continuation_response = gemini_model.generate_content(
+                            (
+                                f"{full_prompt}\n\n"
+                                "Continue from the exact last sentence without repeating earlier text. "
+                                "Finish the answer completely."
+                            ),
+                            generation_config=model.types.GenerationConfig(
+                                temperature=0.7,
+                                max_output_tokens=1200,
+                                top_p=0.95,
+                            ),
+                        )
+                        continuation = _extract_reply_text(continuation_response)
+                        if continuation:
+                            reply = f"{reply}\n\n{continuation}".strip()
+                    except Exception as continuation_exc:
+                        logger.warning("Gemini continuation call failed: %s", continuation_exc)
+                
+                # If it looks okay, return it immediately. 
+                # Avoid the 'retry' loop which often causes the '10-word' generic output.
+                if reply and not _looks_incomplete(reply):
                     return reply
+                
+                # If we must retry, be less restrictive
+                if reply: return reply 
+
             except Exception as model_exc:
                 logger.warning("Gemini model '%s' failed: %s", model_name, model_exc)
 
@@ -324,3 +436,56 @@ def _fallback_response(user_message: str, needs_pgvector: bool) -> str:
         "That's a great question! I'm processing your context to give you the best answer. "
         "Could you tell me a bit more about what specifically is confusing you?"
     )
+
+
+def summarize_conversation_memory(topic: str, conversation_text: str) -> str:
+    """Generate a concise AI summary for a topic-specific chat memory bucket."""
+    if not conversation_text.strip():
+        return "No conversation context available yet for this topic."
+
+    model = _get_gemini_model()
+    if model is None:
+        return (
+            "This memory contains prior discussion context for this topic, "
+            "including your goals and the latest guidance."
+        )
+
+    summary_prompt = (
+        "You are generating a memory card summary for a tutoring app. "
+        "Write one concise paragraph (3-5 sentences) that captures: "
+        "what the student discussed, key confusion points, and the next best step. "
+        "Keep it practical, warm, and easy to scan.\n\n"
+        f"Topic: {topic}\n\n"
+        f"Conversation snippets:\n{conversation_text}"
+    )
+
+    for model_name in _iter_model_candidates():
+        try:
+            gemini_model = model.GenerativeModel(model_name)
+            response = gemini_model.generate_content(
+                summary_prompt,
+                generation_config=model.types.GenerationConfig(
+                    temperature=0.35,
+                    max_output_tokens=260,
+                    top_p=0.9,
+                ),
+            )
+            reply = _extract_reply_text(response)
+            if reply:
+                return reply
+        except Exception as exc:
+            logger.warning("Memory summary generation failed on model '%s': %s", model_name, exc)
+
+    return (
+        "This memory includes recent discussion points, unresolved questions, "
+        "and suggested follow-up actions for this topic."
+    )
+
+
+
+
+#     now not soo strict be cool and also maintain the context window and the chat_history of current rnning should also be send to api so that it can understand what is now runing and also send the summary of that chat history so that the gemini know that what is right now talking and what was he talked from database 
+
+# for summary right now use ai i will use another model later now please read and backend and also update the AGENTS.md so and also not to be see strict and also the current running chat should have context window maintained
+
+# please implement this features

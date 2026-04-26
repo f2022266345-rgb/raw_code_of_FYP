@@ -18,13 +18,61 @@
 ## 3) Current Runtime Flow (Agent Chat)
 
 1. Frontend sends chat message to Express: POST /api/chat
-2. Express authenticates user, enriches context, forwards to FastAPI: POST /api/agent/chat
-3. FastAPI pipeline runs:
-   - Retrieve student context from DB mirrors
-   - Build state/persona prompt package
-   - Call Gemini with token-optimized instruction
-4. FastAPI returns response + metadata (state, persona, p_mastery)
-5. Express logs user/assistant events and returns final response to frontend
+2. Frontend includes current in-memory chat window (recent turns) in the same request.
+3. Express authenticates user, fetches recent persisted chat turns from InteractionLog, and forwards both windows to FastAPI: POST /api/agent/chat
+4. FastAPI pipeline runs by retrieving student context from DB mirrors, building the state/persona prompt package, building a context window (session + DB), generating an AI summary of chat history for continuity, and then calling Gemini with prompt + context window + summary.
+5. FastAPI returns response + metadata (state, persona, p_mastery).
+6. Express logs user/assistant events and returns final response to frontend.
+
+## 3.1) Current Runtime Flow (Onboarding)
+
+1. Frontend submits onboarding form to Express: POST /api/initial-profiling
+2. Express immediately saves raw onboarding data in InitialProfile:
+  - educationalBackground
+  - learningPreferences
+  - culturalContext
+  - diagnosticAssessment
+3. Express calls FastAPI ML endpoint: POST /api/predict/initial-profile
+4. Express saves prediction outputs in InitialProfile:
+  - bloom_level_predicted
+  - language_barrier_risk
+  - learning_barriers_score
+  - wellness_support_needed
+  - social_support_needed
+  - academic_support_needed
+5. Express computes cognitive rules and persists them:
+  - pacing
+  - chunking
+  - languageSupport
+6. Express activates agent mappings and persists active_agents
+7. Express marks user onboarded and returns dashboard-ready payload
+
+Why this matters:
+- Initial profiling is the control layer for personalization.
+- It prevents one-size-fits-all tutoring by converting raw form data into support-aware routing (academic/social/wellness), pacing strategy, and language scaffolding.
+- It creates a durable baseline used by dashboard, chat orchestration, and future BKT/trend updates.
+
+## 3.2) Current Runtime Flow (Cognitive Understanding)
+
+1. Observable interaction logs are written through chat, observations, and BKT endpoints.
+2. Express updates per-skill mastery using BKT with skill identifiers from interaction metadata/content context.
+3. Express recomputes trend slopes over the latest 5 to 10 student_interactions:
+  - accuracy trend slope
+  - time trend slope
+  - hint trend slope
+4. Express persists the hidden state snapshot in student_profile_state:
+  - mastery summary
+  - frustration estimate
+  - engagement estimate
+  - readiness estimate
+  - hidden_state mapping JSON
+5. The latent-state layer is research-valid because it maps observables to inferred learner states:
+  - correctness, hints, response time, session time, sentiment -> frustration / engagement / readiness
+  - skill-level evidence -> mastery probability P(Know)
+
+Why this matters:
+- These hidden states are not directly observable, so they must be inferred from behavior.
+- This gives the tutoring system a structured learner model that can adapt explanations, pacing, and agent routing.
 
 ## 4) Key Files (Do Not Break)
 
@@ -40,7 +88,7 @@
 
 - Express .env (backend_express/.env):
   - PORT=4000
-  - FASTAPI_BASE_URL=http://localhost:8080 (FastAPI backend on port 8080 due to local port conflict)
+  - FASTAPI_BASE_URL=<http://localhost:8080> (FastAPI backend on port 8080 due to local port conflict)
   - DATABASE_URL=postgres://...
   - JWT_SECRET=...
 - FastAPI .env (backend/.env):
@@ -57,6 +105,21 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
 - Preferred usage:
   - buildApiUrl("/api/chat")
   - buildApiUrl("/api/initial-profiling")
+  - buildApiUrl("/api/chat/history")
+  - buildApiUrl("/api/chat/memories")
+- Chat payload contract for POST /api/chat should include:
+  - message
+  - agentType
+  - skillName
+  - chatHistory (recent in-session turns, recommended last 12)
+- Chat history query contract for GET /api/chat/history supports:
+  - q (message search)
+  - agent (coordinator|academic|social|wellness)
+  - role (user|assistant)
+  - date (single day)
+  - fromDate / toDate (range)
+  - order (asc|desc)
+  - limit
 
 ## 7) Implementation Status Snapshot
 
@@ -66,6 +129,12 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
   - Trend engine logic
   - Express↔FastAPI onboarding/chat integration
   - Token-optimized Gemini orchestration route
+  - Context window continuity (frontend history + DB history merged per request)
+  - AI-generated chat-history summary injected into Gemini prompt
+  - Looser conversational prompt style (less rigid response constraints)
+  - Dashboard Chat History page with backend-driven search + date filters
+  - Memory tab with topic-bucketed AI summaries (math, health, family, etc.)
+  - Onboarding persistence pipeline enforced: Form -> Save raw -> Predict -> Save predictions -> Compute cognitive rules -> Activate agents -> Dashboard-ready response
 - In progress:
   - pgvector-first semantic memory flow hardening
   - full production-grade endpoint integration and deployment readiness
@@ -73,7 +142,8 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
 ## 8) Known Risks / Notes
 
 - ✅ **FIXED: Gemini Import Error** - Previous code used `from google import genai` which caused "cannot import name 'genai'" error. Corrected to `import google.generativeai as genai` with proper API initialization via `genai.configure(api_key=...)` and `genai.GenerativeModel()`. Real Gemini responses now flow through the pipeline.
-- ✅ **FIXED: Port Conflict** - FastAPI now runs on port 8080 (port 8000 was occupied). Updated Express FASTAPI_BASE_URL to http://localhost:8080.
+- ✅ **FIXED: Port Conflict** - FastAPI now runs on port 8080 (port 8000 was occupied). Updated Express FASTAPI_BASE_URL to <http://localhost:8080>.
+- ✅ **FIXED: Truncated/Short Agent Replies** - FastAPI Gemini orchestration now prefers complete responses by default, increased response token budget, and performs a continuation call when generation stops at token limit. This prevents cut-off replies such as partial last sentences.
 - Legacy FastAPI file backend/services/chat_service.py still references OpenAI; active agent-chat flow uses gemini_agent.py through /api/agent/chat.
 - FastAPI DB init expects vector extension in local PostgreSQL.
 - If vector extension is unavailable locally, vector-dependent features may degrade or fail.
@@ -82,7 +152,7 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
 ## 9) Local Run Order
 
 1. Start PostgreSQL and ensure database exists.
-2. Start FastAPI backend (port 8000).
+2. Start FastAPI backend (port 8080).
 3. Start Express backend (port 4000).
 4. Start Next.js frontend (port 3000 by default).
 5. Verify:
@@ -102,3 +172,14 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
 - Treat `backend/routers/agent_router.py` + `backend/services/gemini_agent.py` as the active inference/chat pipeline.
 - Keep `AGENTS.md` updated when runtime contracts change (ports, env variables, model IDs, persistence sequence).
 - Prefer incremental updates in active files over reviving legacy paths.
+- Keep context-window contract stable across layers:
+  - Frontend sends chatHistory
+  - Express adds database_chat_history
+  - FastAPI summarizes + injects continuity context into Gemini prompt
+- Response quality policy for active chat pipeline:
+  - Do not force ultra-short replies by default.
+  - Prefer complete, coherent answers unless the student explicitly requests short output.
+  - If Gemini stops due to max token limit, continue generation and merge continuation.
+- Keep chat-history and memory endpoints stable:
+  - Express /api/chat/history handles date/search/filter queries against InteractionLog
+  - Express /api/chat/memories builds topic buckets and requests AI summaries from FastAPI /api/agent/memory/summary

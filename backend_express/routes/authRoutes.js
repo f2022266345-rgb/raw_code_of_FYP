@@ -6,6 +6,6 @@ const router = express.Router();
 // Define clean, readable routes
 router.post("/login", authController.login);
 router.post("/signup", authController.signup);
-// router.get("/logout", authController.logout); // Optional: Implement logout logic if needed
+router.post("/logout", authController.logout);
 router.get("/token", authController.token);
 export default router;

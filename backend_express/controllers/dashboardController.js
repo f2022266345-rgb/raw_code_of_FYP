@@ -2,6 +2,7 @@ import db from "../model/index.js";
 import { Op } from "sequelize";
 
 const { User, InitialProfile, InteractionLog, BktSkillMastery } = db;
+const { StudentProfileState } = db;
 
 const toAgentResults = (profileRecord) => {
   const prediction = profileRecord?.aiPrediction || {};
@@ -31,6 +32,10 @@ const getMyDashboard = async (req, res) => {
       where: { userId },
     });
 
+    const profileState = await StudentProfileState.findOne({
+      where: { userId },
+    });
+
     const recentLogs = await InteractionLog.findAll({
       where: { userId },
       order: [["occurredAt", "DESC"]],
@@ -45,6 +50,15 @@ const getMyDashboard = async (req, res) => {
       },
       order: [["occurredAt", "DESC"]],
       limit: 50,
+    });
+
+    const routingHistoryRows = await InteractionLog.findAll({
+      where: {
+        userId,
+        eventType: { [Op.in]: ["chat_user", "chat_assistant"] },
+      },
+      order: [["occurredAt", "DESC"]],
+      limit: 60,
     });
 
     // ── Observation aggregations ─────────────────────────────────────────────
@@ -132,6 +146,18 @@ const getMyDashboard = async (req, res) => {
         agent: log.metadata?.agent || "coordinator",
       }));
 
+    const coordinatorRoutingHistory = routingHistoryRows
+      .filter((row) => row.metadata?.coordinatorDecision)
+      .slice(0, 12)
+      .map((row) => ({
+        occurredAt: row.occurredAt,
+        sourceEventType: row.eventType,
+        routedAgent:
+          row.metadata?.routedAgent || row.metadata?.agent || "coordinator",
+        matchedRule: row.metadata?.coordinatorDecision?.matchedRule || null,
+        rationale: row.metadata?.coordinatorDecision?.rationale || null,
+      }));
+
     const latestChat = recentChatLogs[0] || null;
     const userChatCount = recentChatLogs.filter(
       (log) => log.eventType === "chat_user",
@@ -161,8 +187,14 @@ const getMyDashboard = async (req, res) => {
         ? {
             user_profile: onboardingProfile.userProfile,
             ai_prediction: onboardingProfile.aiPrediction,
+            bloomLevelPredicted: onboardingProfile.bloomLevelPredicted,
             bloomLevel: onboardingProfile.bloomLevel,
             languageBarrierRisk: onboardingProfile.languageBarrierRisk,
+            learningBarriersScore: onboardingProfile.learningBarriersScore,
+            wellnessSupportNeeded: onboardingProfile.wellnessSupportNeeded,
+            socialSupportNeeded: onboardingProfile.socialSupportNeeded,
+            academicSupportNeeded: onboardingProfile.academicSupportNeeded,
+            cognitiveRules: onboardingProfile.cognitiveRules || {},
             activeAgents: onboardingProfile.activeAgents,
           }
         : null,
@@ -171,6 +203,20 @@ const getMyDashboard = async (req, res) => {
         ? toAgentResults(onboardingProfile)
         : { academic: null, social: null, wellness: null },
       bktSummary,
+      hiddenState: profileState
+        ? {
+            masterySummary: profileState.masterySummary,
+            accuracyTrendSlope: profileState.accuracyTrendSlope,
+            timeTrendSlope: profileState.timeTrendSlope,
+            hintTrendSlope: profileState.hintTrendSlope,
+            frustrationEstimate: profileState.frustrationEstimate,
+            engagementEstimate: profileState.engagementEstimate,
+            readinessEstimate: profileState.readinessEstimate,
+            latent: profileState.hiddenState,
+            lastComputedAt: profileState.lastComputedAt,
+          }
+        : null,
+      coordinatorRoutingHistory,
       observations: {
         totalEvents: recentLogs.length,
         totalTimeOnPageMs,

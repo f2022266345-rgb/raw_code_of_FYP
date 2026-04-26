@@ -57,6 +57,12 @@ const InitialProfile = sequelize.define(
       allowNull: false,
       field: "ai_prediction",
     },
+    bloomLevelPredicted: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 1,
+      field: "bloom_level_predicted",
+    },
     // Extracted ML outputs stored as flat columns for easy querying
     bloomLevel: {
       type: DataTypes.INTEGER,
@@ -69,6 +75,36 @@ const InitialProfile = sequelize.define(
       allowNull: true,
       defaultValue: 0.2,
       field: "language_barrier_risk",
+    },
+    learningBarriersScore: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      defaultValue: 0.0,
+      field: "learning_barriers_score",
+    },
+    wellnessSupportNeeded: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+      field: "wellness_support_needed",
+    },
+    socialSupportNeeded: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+      field: "social_support_needed",
+    },
+    academicSupportNeeded: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: true,
+      field: "academic_support_needed",
+    },
+    cognitiveRules: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: {},
+      field: "cognitive_rules",
     },
     activeAgents: {
       type: DataTypes.ARRAY(DataTypes.STRING),

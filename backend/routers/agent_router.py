@@ -46,7 +46,7 @@ from sqlalchemy import desc
 from db import get_db, AgentMemoryORM
 from services.context_retriever import get_student_context
 from services.state_engine import build_prompt_package, PROMPT_TEMPLATE_A, PROMPT_TEMPLATE_B, PROMPT_TEMPLATE_C
-from services.gemini_agent import call_gemini
+from services.gemini_agent import call_gemini, summarize_conversation_memory
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["Agent Orchestration"])
@@ -74,6 +74,9 @@ class AgentChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000, description="Student's message")
     agent_type: str = Field(default="academic", description="academic | wellness | social | coordinator")
     student_name: str = Field(default="the student", description="Student's display name")
+    chat_history: List[dict] = Field(default_factory=list, description="Recent in-session chat history from frontend")
+    database_chat_history: List[dict] = Field(default_factory=list, description="Recent persisted chat history from database")
+    orchestration_context: dict = Field(default_factory=dict, description="Coordinator rules + hidden/profile context")
 
     class Config:
         json_schema_extra = {
@@ -83,6 +86,10 @@ class AgentChatRequest(BaseModel):
                 "message": "I don't understand when to use the formula",
                 "agent_type": "academic",
                 "student_name": "Ali",
+                "chat_history": [
+                    {"role": "user", "content": "Can we revise the formula?"},
+                    {"role": "assistant", "content": "Sure. What part is confusing?"},
+                ],
             }
         }
 
@@ -95,6 +102,8 @@ class AgentChatResponse(BaseModel):
     """
     agent_type: str
     response: str
+    routed_agent: str
+    coordinator_decision: Optional[dict] = None
     # State engine metadata
     state: str                           # INTELLIGENT | STRUGGLING | DEVELOPING
     persona: str                         # Peer-to-Peer | Socratic Tutor | Coach
@@ -137,6 +146,16 @@ class WellnessSyncResponse(BaseModel):
     success: bool
     message: str
     memory_id: int
+
+
+class MemorySummaryRequest(BaseModel):
+    topic: str = Field(..., min_length=1, max_length=80)
+    conversation_text: str = Field(..., min_length=1, max_length=12000)
+
+
+class MemorySummaryResponse(BaseModel):
+    topic: str
+    summary: str
 
 
 class StudentContextResponse(BaseModel):
@@ -216,6 +235,7 @@ async def agent_chat(payload: AgentChatRequest, db: Session = Depends(get_db)):
         user_message=payload.message,
         student_name=payload.student_name,
         agent_type=payload.agent_type,
+        orchestration_context=payload.orchestration_context,
     )
 
     # ── Task 4: Token-Optimized Gemini Call ──────────────────────────────
@@ -225,6 +245,8 @@ async def agent_chat(payload: AgentChatRequest, db: Session = Depends(get_db)):
         needs_pgvector=prompt_pkg.needs_pgvector,
         skill_name=payload.skill_name,
         db=db,
+        chat_history=payload.chat_history,
+        database_chat_history=payload.database_chat_history,
     )
 
     # Approximate token count for response metadata
@@ -234,6 +256,8 @@ async def agent_chat(payload: AgentChatRequest, db: Session = Depends(get_db)):
     return AgentChatResponse(
         agent_type=payload.agent_type,
         response=response_text,
+        routed_agent=payload.agent_type,
+        coordinator_decision=payload.orchestration_context.get("coordinatorDecision"),
         state=prompt_pkg.state,
         persona=prompt_pkg.persona,
         p_mastery=ctx.p_mastery,
@@ -374,3 +398,17 @@ async def get_prompt_templates():
         condition_c_label="Encouraging Coach (Developing / Default)",
         condition_c_template=PROMPT_TEMPLATE_C,
     )
+
+
+@router.post(
+    "/memory/summary",
+    response_model=MemorySummaryResponse,
+    summary="Generate AI memory summary for a topic",
+)
+async def memory_summary(payload: MemorySummaryRequest):
+    summary = summarize_conversation_memory(
+        topic=payload.topic,
+        conversation_text=payload.conversation_text,
+    )
+
+    return MemorySummaryResponse(topic=payload.topic, summary=summary)

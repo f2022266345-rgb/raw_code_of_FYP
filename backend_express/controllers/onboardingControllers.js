@@ -2,7 +2,74 @@ import db from "../model/index.js";
 
 const { User, InitialProfile, BktSkillMastery } = db;
 const FASTAPI_BASE_URL =
-  process.env.FASTAPI_BASE_URL || "http://localhost:8000";
+  process.env.FASTAPI_BASE_URL || "http://localhost:8080";
+
+const computeCognitiveRules = ({
+  languageBarrierRisk,
+  learningBarriersScore,
+  bloomLevelPredicted,
+  learningPreferences,
+}) => {
+  const pace =
+    learningBarriersScore >= 0.7 || bloomLevelPredicted <= 2
+      ? "slow"
+      : learningBarriersScore >= 0.45
+        ? "moderate"
+        : "adaptive-fast";
+
+  const chunking =
+    learningBarriersScore >= 0.6 || bloomLevelPredicted <= 2
+      ? "micro-chunks"
+      : bloomLevelPredicted <= 4
+        ? "medium-chunks"
+        : "concept-blocks";
+
+  const preferredLanguage =
+    learningPreferences?.languagePreference || "english-only";
+  const languageSupport =
+    languageBarrierRisk >= 0.6 || preferredLanguage !== "english-only"
+      ? "bilingual-scaffold"
+      : "english-primary";
+
+  return {
+    pacing: pace,
+    chunking,
+    languageSupport,
+  };
+};
+
+const activateAgentMappings = ({
+  academicSupportNeeded,
+  socialSupportNeeded,
+  wellnessSupportNeeded,
+  predictedAgents,
+}) => {
+  const agents = new Set(["coordinator"]);
+
+  if (academicSupportNeeded) {
+    agents.add("academic");
+  }
+  if (socialSupportNeeded) {
+    agents.add("social");
+  }
+  if (wellnessSupportNeeded) {
+    agents.add("wellness");
+  }
+
+  if (Array.isArray(predictedAgents)) {
+    predictedAgents.forEach((agent) => {
+      if (["coordinator", "academic", "social", "wellness"].includes(agent)) {
+        agents.add(agent);
+      }
+    });
+  }
+
+  if (!agents.has("academic")) {
+    agents.add("academic");
+  }
+
+  return Array.from(agents);
+};
 
 const onboardingController = async (req, res) => {
   console.log("Received onboarding data:", req.body);
@@ -33,7 +100,37 @@ const onboardingController = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ── Step 1: Call FastAPI for ML predictions ───────────────────────────────
+    // ── Step 1: Save raw onboarding profile immediately ───────────────────────
+    let profileRecord = await InitialProfile.findOne({ where: { userId } });
+    if (!profileRecord) {
+      profileRecord = await InitialProfile.create({
+        userId,
+        educationalBackground,
+        learningPreferences,
+        culturalContext,
+        diagnosticAssessment: diagnosticAssessment || {},
+        userProfile: {},
+        aiPrediction: {},
+        bloomLevelPredicted: 1,
+        bloomLevel: 1,
+        languageBarrierRisk: 0.2,
+        learningBarriersScore: 0.0,
+        wellnessSupportNeeded: false,
+        socialSupportNeeded: false,
+        academicSupportNeeded: true,
+        cognitiveRules: {},
+        activeAgents: ["coordinator", "academic"],
+      });
+    } else {
+      await profileRecord.update({
+        educationalBackground,
+        learningPreferences,
+        culturalContext,
+        diagnosticAssessment: diagnosticAssessment || {},
+      });
+    }
+
+    // ── Step 2: Call FastAPI for ML predictions ───────────────────────────────
     const fastApiResponse = await fetch(
       `${FASTAPI_BASE_URL}/api/predict/initial-profile`,
       {
@@ -63,35 +160,50 @@ const onboardingController = async (req, res) => {
     const prediction = predictionData?.prediction || {};
     const userProfile = prediction.user_profile || {};
     const aiPrediction = prediction.ai_prediction || {};
-    const bloomLevel = prediction.bloom_level ?? 1;
+    const bloomLevelPredicted =
+      prediction.bloom_level_predicted ?? prediction.bloom_level ?? 1;
+    const bloomLevel = bloomLevelPredicted;
     const languageBarrierRisk = prediction.language_barrier_risk ?? 0.2;
-    const activeAgents = prediction.active_agents ?? [
-      "academic",
-      "coordinator",
-    ];
+    const learningBarriersScore = prediction.learning_barriers_score ?? 0.0;
+    const wellnessSupportNeeded = prediction.wellness_support_needed ?? false;
+    const socialSupportNeeded = prediction.social_support_needed ?? false;
+    const academicSupportNeeded = prediction.academic_support_needed ?? true;
+    const cognitiveRules = computeCognitiveRules({
+      languageBarrierRisk,
+      learningBarriersScore,
+      bloomLevelPredicted,
+      learningPreferences,
+    });
+    const activeAgents = activateAgentMappings({
+      academicSupportNeeded,
+      socialSupportNeeded,
+      wellnessSupportNeeded,
+      predictedAgents: prediction.active_agents,
+    });
     const persistentLearnerId = predictionData.persistentLearnerId;
 
-    // ── Step 2: Save onboarding profile to DB ─────────────────────────────────
-    await InitialProfile.upsert({
-      userId,
+    // ── Step 3: Save prediction outputs + cognitive rules + agents ───────────
+    await profileRecord.update({
       persistentLearnerId,
-      educationalBackground,
-      learningPreferences,
-      culturalContext,
-      diagnosticAssessment: diagnosticAssessment || {},
       userProfile,
       aiPrediction,
+      bloomLevelPredicted,
       bloomLevel,
       languageBarrierRisk,
+      learningBarriersScore,
+      wellnessSupportNeeded,
+      socialSupportNeeded,
+      academicSupportNeeded,
+      cognitiveRules,
       activeAgents,
     });
 
-    // ── Step 3: Save persistentLearnerId to User record ───────────────────────
+    // ── Step 4: Save persistentLearnerId to User record ───────────────────────
     user.isOnboarded = true;
     user.persistentLearnerId = persistentLearnerId;
     await user.save();
 
-    // ── Step 4: Seed BKT skill mastery rows for this user ─────────────────────
+    // ── Step 5: Seed BKT skill mastery rows for this user ─────────────────────
     // Fetch the full skill list from FastAPI (190 skills with BKT params)
     try {
       const skillsResponse = await fetch(`${FASTAPI_BASE_URL}/api/bkt/skills`);
@@ -141,7 +253,7 @@ const onboardingController = async (req, res) => {
       );
     }
 
-    // ── Step 5: Return consolidated response ──────────────────────────────────
+    // ── Step 6: Return dashboard-ready onboarding response ────────────────────
     return res.status(200).json({
       userId,
       persistentLearnerId,
@@ -151,10 +263,33 @@ const onboardingController = async (req, res) => {
         culturalContext,
         diagnosticAssessment: diagnosticAssessment || {},
       },
-      aiPrediction: prediction,
+      aiPrediction: {
+        ...prediction,
+        bloom_level_predicted: bloomLevelPredicted,
+        language_barrier_risk: languageBarrierRisk,
+        learning_barriers_score: learningBarriersScore,
+        wellness_support_needed: wellnessSupportNeeded,
+        social_support_needed: socialSupportNeeded,
+        academic_support_needed: academicSupportNeeded,
+      },
+      cognitiveRules,
       bloomLevel,
+      bloomLevelPredicted,
       languageBarrierRisk,
+      learningBarriersScore,
+      wellnessSupportNeeded,
+      socialSupportNeeded,
+      academicSupportNeeded,
       activeAgents,
+      pipeline: [
+        "form_received",
+        "raw_profile_saved",
+        "prediction_completed",
+        "prediction_saved",
+        "cognitive_rules_created",
+        "agents_activated",
+        "dashboard_ready",
+      ],
     });
   } catch (error) {
     console.error("Error in onboarding controller:", error);

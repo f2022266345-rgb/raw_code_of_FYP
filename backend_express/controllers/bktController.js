@@ -1,9 +1,11 @@
 import db from "../model/index.js";
 import { Op } from "sequelize";
+import { recomputeAndStoreProfileState } from "../services/cognitiveStateService.js";
 
-const { BktSkillMastery, InteractionLog, InitialProfile } = db;
+const { BktSkillMastery, InteractionLog, InitialProfile, StudentProfileState } =
+  db;
 const FASTAPI_BASE_URL =
-  process.env.FASTAPI_BASE_URL || "http://localhost:8000";
+  process.env.FASTAPI_BASE_URL || "http://localhost:8080";
 
 /**
  * BKT Update Formula:
@@ -149,6 +151,8 @@ const updateSkillMastery = async (req, res) => {
       lastPracticedAt: new Date(),
     });
 
+    await recomputeAndStoreProfileState(userId);
+
     return res.status(200).json({
       skillName,
       prevMastery: parseFloat((prevMastery * 100).toFixed(1)),
@@ -170,6 +174,11 @@ const updateSkillMastery = async (req, res) => {
 const analyzeState = async (req, res) => {
   try {
     const { userId } = req.user;
+
+    let profileState = await StudentProfileState.findOne({ where: { userId } });
+    if (!profileState) {
+      profileState = await recomputeAndStoreProfileState(userId);
+    }
 
     // Get the last 7 interaction logs
     const logs = await InteractionLog.findAll({
@@ -250,10 +259,26 @@ const analyzeState = async (req, res) => {
     }
 
     const stateData = await faResponse.json();
+
+    profileState = await StudentProfileState.findOne({ where: { userId } });
+
     return res.status(200).json({
       state: stateData.state,
       signals: stateData.signals,
       eventsAnalyzed: orderedLogs.length,
+      hiddenState: profileState
+        ? {
+            masterySummary: profileState.masterySummary,
+            accuracyTrendSlope: profileState.accuracyTrendSlope,
+            timeTrendSlope: profileState.timeTrendSlope,
+            hintTrendSlope: profileState.hintTrendSlope,
+            frustrationEstimate: profileState.frustrationEstimate,
+            engagementEstimate: profileState.engagementEstimate,
+            readinessEstimate: profileState.readinessEstimate,
+            latent: profileState.hiddenState,
+            lastComputedAt: profileState.lastComputedAt,
+          }
+        : null,
     });
   } catch (error) {
     console.error("analyzeState error:", error);

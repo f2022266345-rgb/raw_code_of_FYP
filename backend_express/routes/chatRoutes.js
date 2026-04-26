@@ -7,5 +7,6 @@ const router = express.Router();
 // Send a message to an AI agent — returns LLM response
 router.post("/", requireAuth, chatController.chatWithAgent);
 router.get("/history", requireAuth, chatController.getChatHistory);
+router.get("/memories", requireAuth, chatController.getChatMemories);
 
 export default router;

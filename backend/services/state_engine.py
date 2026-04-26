@@ -11,17 +11,17 @@ Evaluates the StudentContext from context_retriever.py and:
 Condition A (INTELLIGENT / Mastery):
   Trigger  : p_mastery > 0.7  OR  bloom_level >= 4
   Persona  : Peer-to-Peer
-  Constraint: Direct answers only. Max 2 sentences. No lecturing.
+    Constraint: Direct, practical answers first. Expand with examples when useful.
 
 Condition B (STRUGGLING / Scaffolding):
   Trigger  : p_mastery < 0.4  OR  language_barrier_risk > 0.6
   Persona  : Socratic Tutor
-  Constraint: Do NOT give the answer. Ask one guiding question.
-              Calibrate to learning_preferences. Max 2 sentences.
+    Constraint: Start with a guiding question and then scaffold clearly.
+                            Calibrate to learning_preferences and avoid abrupt short replies.
 
 Condition C (DEVELOPING) — default between A and B.
   Persona  : Encouraging Coach
-  Constraint: Brief explanation + one practice hint. Max 3 sentences.
+    Constraint: Clear explanation + one practice hint, with enough detail to complete the thought.
 """
 
 from __future__ import annotations
@@ -47,21 +47,23 @@ StudentState = Literal["INTELLIGENT", "STRUGGLING", "DEVELOPING"]
 # ── Condition A: Peer-to-Peer (Mastery / Intelligent) ─────────────────────────
 PROMPT_TEMPLATE_A = """You are a peer tutor helping {name} with {skill_name}.
 Persona: Peer-to-Peer. Mood detected: {mood}. Cognitive state: {cognitive_state}.
-Rules: Give a direct, concise answer in complete sentences. Maximum 3 sentences. No lectures or preamble.
+Rules: Be clear and conversational. Prefer practical examples over rigid theory.
+Give a complete answer by default, not a cut-off or one-line response.
 Bloom level {bloom_level}/6 — use advanced vocabulary appropriate to this level."""
 
 # ── Condition B: Socratic Tutor (Struggling / Scaffolding) ────────────────────
 PROMPT_TEMPLATE_B = """You are a Socratic tutor helping {name} with {skill_name}.
 Persona: Guiding Mentor. Student mood: {mood}. Language barrier risk: {lang_risk_pct}%.
-Rules: Do NOT give the answer directly. Ask exactly ONE guiding question that leads
-the student to discover the answer themselves. Calibrate to their learning style
-({dominant_style}). Use complete sentences only. Maximum 3 sentences.{urdu_note}"""
+Rules: Start with a guiding question, then give a small hint if needed.
+Then provide a complete scaffolded explanation without being overly brief.
+Calibrate to their learning style ({dominant_style}). Keep tone supportive and natural.{urdu_note}"""
 
 # ── Condition C: Encouraging Coach (Developing) ────────────────────────────────
 PROMPT_TEMPLATE_C = """You are an encouraging tutor helping {name} with {skill_name}.
 Persona: Supportive Coach. Student mood: {mood}. Study pace: {study_pace}.
-Rules: Provide a brief, clear explanation followed by one practice hint.
-Maximum 4 sentences in complete thoughts. Keep tone warm and encouraging.{urdu_note}"""
+Rules: Provide a clear explanation followed by one practice hint.
+Make the response complete and coherent unless the student asks for a very short reply.
+Keep tone warm, human, and practical. Avoid overly strict formatting.{urdu_note}"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PromptPackage — output of the state engine
@@ -138,7 +140,7 @@ def _urdu_note(ctx: StudentContext) -> str:
     if ctx.needs_urdu_support:
         return (
             " When introducing new terms, optionally add the Urdu equivalent "
-            "in parentheses (e.g., 'loop (لوپ)'). Keep sentences short."
+            "in parentheses (e.g., 'loop (لوپ)'). Keep language simple and clear."
         )
     return ""
 
@@ -154,7 +156,8 @@ def _agent_directive(agent_type: str) -> str:
     if normalized == "academic":
         return (
             "Agent scope: Academic. Focus only on curriculum mastery, skill gaps, "
-            "BKT progression, and study strategy. Avoid wellness or social advice unless safety-critical."
+            "BKT progression, and study strategy. Keep responses natural and not robotic. "
+            "Avoid wellness or social advice unless safety-critical."
         )
 
     if normalized == "wellness":
@@ -184,6 +187,7 @@ def build_prompt_package(
     user_message: str,
     student_name: str = "the student",
     agent_type: str = "coordinator",
+    orchestration_context: dict | None = None,
 ) -> PromptPackage:
     """
     Determines the student's state and renders the appropriate system prompt.
@@ -202,6 +206,8 @@ def build_prompt_package(
     cognitive_state = ctx.cognitive_state or "NEUTRAL"
     dominant_style = _dominant_learning_style(ctx.learning_styles)
     urdu_note = _urdu_note(ctx)
+
+    orchestration_context = orchestration_context or {}
 
     if state == "INTELLIGENT":
         persona = "Peer-to-Peer"
@@ -237,7 +243,36 @@ def build_prompt_package(
     # pgvector needed when student is struggling AND hasn't practiced much
     needs_pgvector = ctx.p_mastery < 0.4 and ctx.practice_count < 3
 
-    system_instruction = f"{system_instruction}\n{_agent_directive(agent_type)}"
+    profile_ctx = orchestration_context.get("profile") or {}
+    hidden_ctx = orchestration_context.get("hiddenState") or {}
+    coordinator_decision = orchestration_context.get("coordinatorDecision") or {}
+
+    cultural_context = profile_ctx.get("culturalContext") or {}
+    learning_prefs = profile_ctx.get("learningPreferences") or {}
+    cognitive_rules = profile_ctx.get("cognitiveRules") or {}
+
+    orchestration_note = (
+        "\nOrchestration Context: "
+        f"Bloom={orchestration_context.get('bloomLevel', ctx.bloom_level)}/6; "
+        f"LanguagePreference={orchestration_context.get('languagePreference', ctx.language_preference)}; "
+        f"CulturalRegion={cultural_context.get('region', 'Pakistan-context')}; "
+        f"CognitiveChunking={cognitive_rules.get('chunking', 'medium-chunks')}; "
+        f"Frustration={hidden_ctx.get('frustrationEstimate', 'n/a')}; "
+        f"Readiness={hidden_ctx.get('readinessEstimate', 'n/a')}; "
+        f"Engagement={hidden_ctx.get('engagementEstimate', 'n/a')}."
+        " Use culturally aware examples, align complexity to Bloom level, and if language risk is high provide bilingual support."
+        " Keep cognitive load manageable by chunking explanation into short progressive steps."
+    )
+
+    if coordinator_decision:
+        orchestration_note += (
+            f" Coordinator routing rationale: {coordinator_decision.get('matchedRule', 'n/a')}"
+            f" ({coordinator_decision.get('rationale', 'n/a')})."
+        )
+
+    system_instruction = (
+        f"{system_instruction}\n{_agent_directive(agent_type)}{orchestration_note}"
+    )
 
     ctx_snapshot = {
         "user_id": ctx.user_id,
@@ -250,6 +285,7 @@ def build_prompt_package(
         "cognitive_state": cognitive_state,
         "state": state,
         "needs_pgvector": needs_pgvector,
+        "orchestration_context": orchestration_context,
     }
 
     logger.info(

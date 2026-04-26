@@ -78,6 +78,24 @@ def _compute_active_agents(stress_level: int, language_barrier_risk: float,
     return agents
 
 
+def _compute_learning_barriers_score(
+    language_barrier_risk: float,
+    stress_level: int,
+    challenge_count: int,
+) -> float:
+    """
+    Composite learning barrier score normalized to [0.0, 1.0].
+    """
+    stress_component = min(stress_level / 10.0, 1.0)
+    challenge_component = min(challenge_count / 5.0, 1.0)
+    weighted = (
+        0.45 * language_barrier_risk
+        + 0.35 * stress_component
+        + 0.20 * challenge_component
+    )
+    return round(min(max(weighted, 0.0), 1.0), 2)
+
+
 def predict_initial_profile(data_dict: dict) -> dict:
     edu = data_dict.get("educationalBackground", {})
     pref = data_dict.get("learningPreferences", {})
@@ -124,6 +142,17 @@ def predict_initial_profile(data_dict: dict) -> dict:
     active_agents = _compute_active_agents(
         stress_level, language_barrier_risk, social_battery, culture
     )
+
+    # ── 7.1 Learning Barrier and Support Flags ───────────────────────────────
+    learning_barriers_score = _compute_learning_barriers_score(
+        language_barrier_risk=language_barrier_risk,
+        stress_level=stress_level,
+        challenge_count=len(challenges),
+    )
+
+    wellness_support_needed = stress_level >= 6 or learning_barriers_score >= 0.65
+    social_support_needed = social_battery == "low" or culture.get("firstGenStudent", False)
+    academic_support_needed = True
 
     # ── 8. Build Profile ────────────────────────────────────────────────────────
     profile = {
@@ -185,6 +214,11 @@ def predict_initial_profile(data_dict: dict) -> dict:
             "status": status,
         },
         "bloom_level": bloom_level,
+        "bloom_level_predicted": bloom_level,
         "language_barrier_risk": language_barrier_risk,
+        "learning_barriers_score": learning_barriers_score,
+        "wellness_support_needed": wellness_support_needed,
+        "social_support_needed": social_support_needed,
+        "academic_support_needed": academic_support_needed,
         "active_agents": active_agents,
     }
