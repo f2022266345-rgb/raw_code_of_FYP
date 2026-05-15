@@ -24,6 +24,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// http://localhost:4000/api/dashboard/login
 // Auth
 app.use("/api/auth", AuthRoutes);
 
@@ -155,3 +156,23 @@ ${BORDER}
 }
 
 startServer();
+
+// @file:AGENTS.md
+
+// what you have to do you have to go to the Fyp_project you have to refine the UI the front page / route is good and everything in it also good but refine the ui make the additional pages
+// only these pages include
+
+// Home
+// Services -> drop down (agent etc add what you like to add)
+// About
+// Contact Us
+
+// all the pricing ui remove
+
+// and also change the ui of sign in sign up page add forgot password functionality from forntend to express_backend
+
+// then if the user is first time login then a forn show now what you have to do to to the form is that the form is good change its ui to match the theme of my website but the payload and the field remain as it is as it is now becuase my bakcend expect this payload to parse
+
+// and then on the dashbaord you have to change the ui
+
+// main thing is that all the website have same theme use no other ui get it

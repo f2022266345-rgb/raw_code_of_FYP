@@ -155,6 +155,51 @@ const authController = {
       return res.status(500).json({ detail: "Failed to logout" });
     }
   },
+
+  // --- FORGOT PASSWORD: Send password reset email ---
+  forgotPassword: async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ detail: "Email is required" });
+      }
+
+      const user = await User.findOne({ where: { email } });
+
+      // For security, always return success message even if user doesn't exist
+      if (!user) {
+        return res.status(200).json({
+          message:
+            "If this email exists in our system, you will receive a password reset link shortly",
+        });
+      }
+
+      // Generate a password reset token (valid for 24 hours)
+      const resetToken = jwt.sign(
+        { userId: user.userId, email: user.email, type: "password-reset" },
+        JWT_SECRET,
+        {
+          expiresIn: "24h",
+        },
+      );
+
+      // TODO: In production, send an email with the reset link
+      // For now, just log it and return success
+      console.log(`🔑 Password reset token for ${email}: ${resetToken}`);
+      console.log(
+        `Reset link: http://localhost:3000/auth/reset-password?token=${resetToken}`,
+      );
+
+      return res.status(200).json({
+        message:
+          "If this email exists in our system, you will receive a password reset link shortly",
+      });
+    } catch (error) {
+      console.error("❌ Forgot password error:", error.message);
+      return res.status(500).json({ detail: "Internal Server Error" });
+    }
+  },
 };
 
 export default authController;
