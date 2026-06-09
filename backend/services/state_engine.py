@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from services.context_retriever import StudentContext
+from services.agent_registry import get_agent_profile
 
 logger = logging.getLogger(__name__)
 
@@ -151,31 +152,8 @@ def _student_name(ctx: StudentContext) -> str:
 
 
 def _agent_directive(agent_type: str) -> str:
-    normalized = (agent_type or "coordinator").lower()
-
-    if normalized == "academic":
-        return (
-            "Agent scope: Academic. Focus only on curriculum mastery, skill gaps, "
-            "BKT progression, and study strategy. Keep responses natural and not robotic. "
-            "Avoid wellness or social advice unless safety-critical."
-        )
-
-    if normalized == "wellness":
-        return (
-            "Agent scope: Wellness. Focus on mood, stress, confidence, and supportive coping actions. "
-            "Do not provide deep academic instruction; hand off to academic when needed."
-        )
-
-    if normalized == "social":
-        return (
-            "Agent scope: Social. Focus on collaboration, peer learning, accountability, and community support. "
-            "Keep academic content lightweight and redirect deep tutoring to the academic agent."
-        )
-
-    return (
-        "Agent scope: Coordinator. You may use all available student context (academic, social, wellness) "
-        "to orchestrate the best next action and decide which specialist agent should lead."
-    )
+    profile = get_agent_profile(agent_type)
+    return profile.guardrails
 
 
 # ─────────────────────────────────────────────────────────────────────────────

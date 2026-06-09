@@ -171,6 +171,11 @@ class InitialProfileORM(Base):
     user_profile: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ai_prediction: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     active_agents: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Additional columns mirrored from Sequelize model for state sync
+    learning_barriers_score: Mapped[float | None] = mapped_column("learning_barriers_score", Float, nullable=True, default=0.0)
+    wellness_support_needed: Mapped[bool | None] = mapped_column("wellness_support_needed", Boolean, nullable=True, default=False)
+    social_support_needed: Mapped[bool | None] = mapped_column("social_support_needed", Boolean, nullable=True, default=False)
+    cognitive_rules: Mapped[dict | None] = mapped_column("cognitive_rules", JSON, nullable=True)
     created_at: Mapped[datetime | None] = mapped_column("createdAt", DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column("updatedAt", DateTime(timezone=True), nullable=True)
 

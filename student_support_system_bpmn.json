@@ -1,0 +1,796 @@
+{
+  "system": {
+    "name": "Student Support Ecosystem",
+    "type": "Multi-Agent AI-Driven Academic Support System",
+    "description": "An intelligent student support system using multiple specialized AI agents to profile students, deliver personalized interventions, and continuously monitor and adjust support plans across academic, social, and psychological dimensions.",
+    "architecture": "Multi-Lane BPMN with 8 Swim Lanes representing agents/interfaces"
+  },
+
+  "swim_lanes": [
+    {
+      "id": "LANE_1",
+      "name": "STUDENT_INTERFACE",
+      "role": "Student-facing interaction layer",
+      "color": "blue",
+      "tasks": [
+        {
+          "id": "T_SI_01",
+          "name": "Registration",
+          "type": "Start Event",
+          "shape": "Circle (Start)",
+          "description": "Student initiates entry into the system by registering.",
+          "inputs": [],
+          "outputs": ["T_SI_02"]
+        },
+        {
+          "id": "T_SI_02",
+          "name": "Complete Registration",
+          "type": "User Task",
+          "shape": "Rectangle with person icon",
+          "description": "Student completes their full registration form — name, ID, program, contact details.",
+          "inputs": ["T_SI_01"],
+          "outputs": ["T_SI_03"]
+        },
+        {
+          "id": "T_SI_03",
+          "name": "View Resources / Attend",
+          "type": "User Task",
+          "shape": "Rectangle with document icon",
+          "description": "Student views assigned resources or attends recommended sessions/interventions.",
+          "inputs": ["T_SI_02", "GATEWAY_CYCLE_COMPLETE"],
+          "outputs": ["GATEWAY_CYCLE_COMPLETE"]
+        },
+        {
+          "id": "GATEWAY_CYCLE_COMPLETE",
+          "name": "Cycle Complete",
+          "type": "Intermediate Timer Event / Gateway",
+          "shape": "Circle with checkmark",
+          "description": "Marks the end of one support cycle. Either loops back for continuation or terminates.",
+          "inputs": ["T_SI_03"],
+          "outputs": ["END_EVENT", "implementation_time_flow"]
+        },
+        {
+          "id": "END_EVENT",
+          "name": "End",
+          "type": "End Event",
+          "shape": "Circle (End)",
+          "description": "Process terminates — student has completed all support cycles.",
+          "inputs": ["GATEWAY_CYCLE_COMPLETE"],
+          "outputs": []
+        }
+      ]
+    },
+
+    {
+      "id": "LANE_2",
+      "name": "STUDENT_PROFILING_AGENT",
+      "role": "Collects and synthesizes student profile data",
+      "color": "blue/teal",
+      "tasks": [
+        {
+          "id": "T_SPA_01",
+          "name": "Collect Demographics",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with person/data icon",
+          "description": "Agent collects demographic data: age, program, year level, background, prior academic history.",
+          "inputs": ["Registration flow from STUDENT_INTERFACE"],
+          "outputs": ["T_SPA_02"]
+        },
+        {
+          "id": "T_SPA_02",
+          "name": "Administer Surveys",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with document icon",
+          "description": "Agent administers standardized surveys to assess student needs, learning styles, challenges, and preferences.",
+          "inputs": ["T_SPA_01"],
+          "outputs": ["T_SPA_03"]
+        },
+        {
+          "id": "T_SPA_03",
+          "name": "Generate Profile",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with document icon",
+          "description": "Agent synthesizes demographics + survey data into a comprehensive student profile object.",
+          "inputs": ["T_SPA_02"],
+          "outputs": ["GW_RISK_LEVEL"]
+        },
+        {
+          "id": "GW_RISK_LEVEL",
+          "name": "Risk Level?",
+          "type": "Exclusive Gateway (XOR)",
+          "shape": "Diamond",
+          "description": "Determines risk classification based on profile. Routes to appropriate agent lanes.",
+          "inputs": ["T_SPA_03"],
+          "outputs": {
+            "High": "COORD_AGENT flow",
+            "Med": "COORD_AGENT flow",
+            "Low": "COORD_AGENT flow"
+          }
+        },
+        {
+          "id": "T_SPA_04",
+          "name": "Collect Progress Data",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with chart icon",
+          "description": "Continuously collects student progress metrics (grades, attendance, engagement) during active support cycle.",
+          "inputs": ["TIMER_2_WEEKS"],
+          "outputs": ["GW_END_SEMESTER"]
+        },
+        {
+          "id": "TIMER_2_WEEKS",
+          "name": "2 Weeks",
+          "type": "Timer Intermediate Event",
+          "shape": "Circle with clock",
+          "description": "A 2-week interval timer that triggers data collection checkpoints.",
+          "inputs": ["Implementation time flow from STUDENT_INTERFACE"],
+          "outputs": ["T_SPA_04"]
+        },
+        {
+          "id": "GW_END_SEMESTER",
+          "name": "End Semester",
+          "type": "Exclusive Gateway (XOR)",
+          "shape": "Diamond",
+          "description": "Decision point: has the semester ended? If yes, triggers Comprehensive Assessment. If not (Continue), loops back.",
+          "inputs": ["T_SPA_04"],
+          "outputs": {
+            "Continue": "T_SPA_04 (loop back)",
+            "End Semester": "T_SPA_05"
+          }
+        },
+        {
+          "id": "T_SPA_05",
+          "name": "Comprehensive Assessment",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with document icon",
+          "description": "End-of-semester full assessment of student outcomes against initial profile and intervention goals.",
+          "inputs": ["GW_END_SEMESTER"],
+          "outputs": ["COORD_AGENT_Outcome_Report via OK flow"]
+        }
+      ]
+    },
+
+    {
+      "id": "LANE_3",
+      "name": "COORDINATION_DECISION_AGENT",
+      "role": "Central orchestrator. Receives profiles, activates sub-agents, collects responses, synthesizes plans, and makes critical decisions.",
+      "color": "red/salmon",
+      "tasks": [
+        {
+          "id": "T_CDA_01",
+          "name": "Receive Profile",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with document icon",
+          "description": "Coordinator receives the generated student profile from the Profiling Agent.",
+          "inputs": ["T_SPA_03"],
+          "outputs": ["T_CDA_02"]
+        },
+        {
+          "id": "T_CDA_02",
+          "name": "Activate Agents",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with gear/broadcast icon",
+          "description": "Coordinator activates all relevant sub-agents: Academic Support, Social Integration, Psychological Wellness.",
+          "inputs": ["T_CDA_01", "GW_RISK_LEVEL (High/Med/Low)"],
+          "outputs": [
+            "ACADEMIC_SUPPORT_AGENT",
+            "SOCIAL_INTEGRATION_AGENT",
+            "PSYCHOLOGICAL_WELLNESS_AGENT"
+          ]
+        },
+        {
+          "id": "T_CDA_03",
+          "name": "Collect Responses",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with merge icon",
+          "description": "Coordinator aggregates plan responses from all activated sub-agents (Academic Plan, Social Plan, Wellness Plan).",
+          "inputs": [
+            "Academic Plan from ACADEMIC_SUPPORT_AGENT",
+            "Social Plan from SOCIAL_INTEGRATION_AGENT",
+            "Wellness Plan from PSYCHOLOGICAL_WELLNESS_AGENT"
+          ],
+          "outputs": ["T_CDA_04"]
+        },
+        {
+          "id": "T_CDA_04",
+          "name": "Synthesize Final Plan",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with AI icon",
+          "description": "AI Coordinator synthesizes all sub-agent plans into a single unified, coherent intervention plan for the student.",
+          "inputs": ["T_CDA_03"],
+          "outputs": ["GW_INTERVENTIONS_NEEDED"]
+        },
+        {
+          "id": "GW_INTERVENTIONS_NEEDED",
+          "name": "Interventions Needed?",
+          "type": "Inclusive/Exclusive Gateway",
+          "shape": "Diamond with down-arrow",
+          "description": "Decision: does the student require active interventions? Routes to delivery agents if yes.",
+          "inputs": ["T_CDA_04"],
+          "outputs": {
+            "Yes_Academic": "INTERVENTION_DELIVERY_AGENT (Academic)",
+            "Yes_Social": "INTERVENTION_DELIVERY_AGENT (Social)",
+            "Yes_Wellness": "INTERVENTION_DELIVERY_AGENT (Wellness)",
+            "Adjust Plan": "T_CDA_03 (feedback loop)"
+          }
+        },
+        {
+          "id": "T_CDA_05",
+          "name": "Analyze Metrics",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with chart icon",
+          "description": "Coordinator analyzes collected progress metrics to evaluate effectiveness of current support plan.",
+          "inputs": ["T_SPA_04 (Collect Progress Data)"],
+          "outputs": ["GW_CRITICAL_ADJUST"]
+        },
+        {
+          "id": "GW_CRITICAL_ADJUST",
+          "name": "Critical Adjust?",
+          "type": "Exclusive Gateway (XOR)",
+          "shape": "Diamond with clock icon",
+          "description": "Decision: is a critical plan adjustment needed based on metrics? Routes to Human Support or continues.",
+          "inputs": ["T_CDA_05"],
+          "outputs": {
+            "Critical": "HUMAN_SUPPORT_SERVICES",
+            "OK": "T_SPA_05 (Comprehensive Assessment)"
+          }
+        },
+        {
+          "id": "T_CDA_06",
+          "name": "Outcome Report",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with report icon",
+          "description": "Generates final outcome report summarizing student progress, interventions delivered, and results.",
+          "inputs": ["T_SPA_05 (Comprehensive Assessment)"],
+          "outputs": ["GW_NEXT_SEMESTER"]
+        },
+        {
+          "id": "GW_NEXT_SEMESTER",
+          "name": "Next Semester?",
+          "type": "Exclusive Gateway (XOR)",
+          "shape": "Diamond with arrow",
+          "description": "Decision: should the student continue into next semester support cycle? If yes, loops back to Registration/new cycle.",
+          "inputs": ["T_CDA_06"],
+          "outputs": {
+            "Yes": "Back to STUDENT_INTERFACE (View Resources / New Cycle)",
+            "No": "End Event"
+          }
+        }
+      ]
+    },
+
+    {
+      "id": "LANE_4",
+      "name": "ACADEMIC_SUPPORT_AGENT",
+      "role": "Assesses academic skills and generates personalized academic intervention plans",
+      "color": "orange/peach",
+      "tasks": [
+        {
+          "id": "T_ASA_01",
+          "name": "Assess Skills",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with document icon",
+          "description": "Agent assesses student's current academic skill levels: reading comprehension, writing, numeracy, subject-specific weaknesses.",
+          "inputs": ["T_CDA_02 (Activate Agents) — Academic route"],
+          "outputs": ["T_ASA_02"]
+        },
+        {
+          "id": "T_ASA_02",
+          "name": "Generate Academic Plan",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with document/AI icon",
+          "description": "Agent generates a personalized academic support plan: tutoring schedule, resource recommendations, study plans, milestones.",
+          "inputs": ["T_ASA_01"],
+          "outputs": ["T_CDA_03 (Collect Responses) — Academic label"]
+        }
+      ],
+      "flow_labels": {
+        "incoming": "Academic (from Coordinator)",
+        "outgoing": "Academic (to Collect Responses)"
+      }
+    },
+
+    {
+      "id": "LANE_5",
+      "name": "SOCIAL_INTEGRATION_AGENT",
+      "role": "Assesses social needs and generates social support/mentoring plans",
+      "color": "yellow/lime",
+      "tasks": [
+        {
+          "id": "T_SIA_01",
+          "name": "Assess Social Needs",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with person icon",
+          "description": "Agent evaluates student's social integration: peer relationships, campus engagement, loneliness, cultural adjustment, group belonging.",
+          "inputs": ["T_CDA_02 (Activate Agents) — Social route"],
+          "outputs": ["T_SIA_02"]
+        },
+        {
+          "id": "T_SIA_02",
+          "name": "Generate Social Plan",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with document icon",
+          "description": "Agent creates a social support plan: peer mentoring matching, club/society recommendations, social skills workshops, check-in schedules.",
+          "inputs": ["T_SIA_01"],
+          "outputs": ["T_CDA_03 (Collect Responses) — Social label"]
+        }
+      ],
+      "flow_labels": {
+        "incoming": "Social (from Coordinator)",
+        "outgoing": "Social (to Collect Responses)"
+      }
+    },
+
+    {
+      "id": "LANE_6",
+      "name": "PSYCHOLOGICAL_WELLNESS_AGENT",
+      "role": "Conducts psychological screening and generates mental wellness plans",
+      "color": "purple/magenta",
+      "tasks": [
+        {
+          "id": "T_PWA_01",
+          "name": "Psych Screening",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with person/brain icon",
+          "description": "Agent conducts psychological screening: standardized mental health questionnaires (PHQ-9, GAD-7 etc.), stress assessment, burnout indicators.",
+          "inputs": ["T_CDA_02 (Activate Agents) — Psychological route"],
+          "outputs": ["GW_SEVERITY"]
+        },
+        {
+          "id": "GW_SEVERITY",
+          "name": "Severity?",
+          "type": "Exclusive Gateway (XOR)",
+          "shape": "Diamond",
+          "description": "Classifies psychological severity level.",
+          "inputs": ["T_PWA_01"],
+          "outputs": {
+            "Standard": "T_PWA_02 (Generate Wellness Plan)",
+            "Critical": "INTERVENTION_DELIVERY_AGENT (Critical route) + HUMAN_SUPPORT_SERVICES"
+          }
+        },
+        {
+          "id": "T_PWA_02",
+          "name": "Generate Wellness Plan",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with heart/document icon",
+          "description": "Agent creates a mental wellness support plan: counseling referrals, mindfulness resources, stress management tools, peer support groups.",
+          "inputs": ["GW_SEVERITY (Standard)"],
+          "outputs": ["T_CDA_03 (Collect Responses) — Wellness label"]
+        }
+      ],
+      "flow_labels": {
+        "incoming": "Psychological (from Coordinator)",
+        "outgoing": "Wellness (to Collect Responses)"
+      }
+    },
+
+    {
+      "id": "LANE_7",
+      "name": "INTERVENTION_DELIVERY_AGENT",
+      "role": "Delivers the actual interventions (academic resources, social mentoring, wellness check) to the student",
+      "color": "green",
+      "tasks": [
+        {
+          "id": "T_IDA_01",
+          "name": "Deliver: Academic Resources",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with document icon",
+          "description": "Delivers curated academic resources to student: readings, videos, tutoring sessions, LMS integrations.",
+          "inputs": ["GW_INTERVENTIONS_NEEDED (Academic route)"],
+          "outputs": ["T_IDA_SYNC"]
+        },
+        {
+          "id": "T_IDA_02",
+          "name": "Deliver: Social Mentoring",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with person icon",
+          "description": "Connects student with peer mentors, schedules social engagement activities, delivers community resources.",
+          "inputs": ["GW_INTERVENTIONS_NEEDED (Social route)"],
+          "outputs": ["T_IDA_SYNC"]
+        },
+        {
+          "id": "T_IDA_03",
+          "name": "Deliver: Wellness Check",
+          "type": "Service Task (AI Agent)",
+          "shape": "Rectangle with heart icon",
+          "description": "Delivers wellness check-ins, mental health resources, counseling appointment booking, crisis hotline info if needed.",
+          "inputs": ["GW_INTERVENTIONS_NEEDED (Wellness route)", "GW_SEVERITY (Critical route)"],
+          "outputs": ["T_IDA_SYNC"]
+        },
+        {
+          "id": "T_IDA_SYNC",
+          "name": "Sync",
+          "type": "Parallel Gateway / Synchronization",
+          "shape": "Diamond with parallel bars",
+          "description": "Synchronization point — waits for all active delivery tasks to complete before proceeding.",
+          "inputs": ["T_IDA_01", "T_IDA_02", "T_IDA_03"],
+          "outputs": ["T_IDA_04"]
+        },
+        {
+          "id": "T_IDA_04",
+          "name": "Log Delivery",
+          "type": "Service Task",
+          "shape": "Rectangle with document icon",
+          "description": "Logs all delivered interventions with timestamps, student acknowledgment, and delivery status into the system.",
+          "inputs": ["T_IDA_SYNC"],
+          "outputs": ["T_CDA_05 (Analyze Metrics) — feedback loop"]
+        }
+      ],
+      "flow_labels": {
+        "incoming_academic": "Academic",
+        "incoming_social": "Social",
+        "incoming_critical": "Critical (from Psych Wellness Agent)",
+        "outgoing": "Feedback to Coordination Agent"
+      }
+    },
+
+    {
+      "id": "LANE_8",
+      "name": "HUMAN_SUPPORT_SERVICES",
+      "role": "Human-in-the-loop override layer for critical cases requiring human judgment",
+      "color": "yellow",
+      "tasks": [
+        {
+          "id": "T_HSS_01",
+          "name": "Human Consultation",
+          "type": "Manual Task (Human)",
+          "shape": "Rectangle with person icon",
+          "description": "A human counselor/advisor reviews the case flagged as critical. Makes judgment calls that AI cannot safely handle autonomously.",
+          "inputs": [
+            "GW_CRITICAL_ADJUST (Critical route from Coordinator)",
+            "GW_SEVERITY (Critical from Psych Agent)"
+          ],
+          "outputs": ["T_HSS_02"]
+        },
+        {
+          "id": "T_HSS_02",
+          "name": "Update AI Parameters",
+          "type": "Service Task",
+          "shape": "Rectangle with document/gear icon",
+          "description": "Human consultant updates AI system parameters: adjusts thresholds, modifies intervention strategies, overrides AI recommendations where needed.",
+          "inputs": ["T_HSS_01"],
+          "outputs": [
+            "T_CDA_03 (Collect Responses) — Human support feedback loop",
+            "T_CDA_04 (Synthesize Final Plan) — parameter update"
+          ]
+        }
+      ],
+      "flow_labels": {
+        "incoming": "Critical (from Coordination Agent or Psych Agent)",
+        "outgoing": "Human support (back to Coordination Agent)"
+      }
+    }
+  ],
+
+  "message_flows": [
+    {
+      "id": "MF_01",
+      "from": "T_SPA_03 (Generate Profile)",
+      "to": "T_CDA_01 (Receive Profile)",
+      "label": "Student Profile Object",
+      "type": "Message Flow (cross-lane)"
+    },
+    {
+      "id": "MF_02",
+      "from": "GW_RISK_LEVEL",
+      "to": "T_CDA_01",
+      "label": "High/Med/Low risk classification",
+      "type": "Conditional Flow"
+    },
+    {
+      "id": "MF_03",
+      "from": "T_CDA_02 (Activate Agents)",
+      "to": "T_ASA_01",
+      "label": "Academic",
+      "type": "Message Flow"
+    },
+    {
+      "id": "MF_04",
+      "from": "T_CDA_02 (Activate Agents)",
+      "to": "T_SIA_01",
+      "label": "Social",
+      "type": "Message Flow"
+    },
+    {
+      "id": "MF_05",
+      "from": "T_CDA_02 (Activate Agents)",
+      "to": "T_PWA_01",
+      "label": "Psychological",
+      "type": "Message Flow"
+    },
+    {
+      "id": "MF_06",
+      "from": "T_ASA_02",
+      "to": "T_CDA_03",
+      "label": "Academic Plan",
+      "type": "Message Flow"
+    },
+    {
+      "id": "MF_07",
+      "from": "T_SIA_02",
+      "to": "T_CDA_03",
+      "label": "Social Plan",
+      "type": "Message Flow"
+    },
+    {
+      "id": "MF_08",
+      "from": "T_PWA_02",
+      "to": "T_CDA_03",
+      "label": "Wellness Plan",
+      "type": "Message Flow"
+    },
+    {
+      "id": "MF_09",
+      "from": "GW_INTERVENTIONS_NEEDED",
+      "to": "T_IDA_01",
+      "label": "Academic intervention",
+      "type": "Conditional Flow"
+    },
+    {
+      "id": "MF_10",
+      "from": "GW_INTERVENTIONS_NEEDED",
+      "to": "T_IDA_02",
+      "label": "Social intervention",
+      "type": "Conditional Flow"
+    },
+    {
+      "id": "MF_11",
+      "from": "GW_INTERVENTIONS_NEEDED",
+      "to": "T_IDA_03",
+      "label": "Wellness intervention",
+      "type": "Conditional Flow"
+    },
+    {
+      "id": "MF_12",
+      "from": "GW_INTERVENTIONS_NEEDED",
+      "to": "T_CDA_03",
+      "label": "Adjust Plan (loop)",
+      "type": "Feedback Loop"
+    },
+    {
+      "id": "MF_13",
+      "from": "GW_SEVERITY (Critical)",
+      "to": "T_IDA_03",
+      "label": "Critical — immediate wellness delivery",
+      "type": "Conditional Flow"
+    },
+    {
+      "id": "MF_14",
+      "from": "GW_SEVERITY (Critical)",
+      "to": "T_HSS_01",
+      "label": "Critical — escalate to human",
+      "type": "Escalation Flow"
+    },
+    {
+      "id": "MF_15",
+      "from": "T_IDA_04 (Log Delivery)",
+      "to": "T_CDA_05 (Analyze Metrics)",
+      "label": "Delivery logs for analysis",
+      "type": "Data Flow"
+    },
+    {
+      "id": "MF_16",
+      "from": "T_SPA_04 (Collect Progress Data)",
+      "to": "T_CDA_05",
+      "label": "Student progress metrics",
+      "type": "Data Flow"
+    },
+    {
+      "id": "MF_17",
+      "from": "GW_CRITICAL_ADJUST (Critical)",
+      "to": "T_HSS_01",
+      "label": "Critical escalation",
+      "type": "Escalation Flow"
+    },
+    {
+      "id": "MF_18",
+      "from": "T_HSS_02",
+      "to": "T_CDA_03 or T_CDA_04",
+      "label": "Human support — updated parameters",
+      "type": "Feedback Loop"
+    },
+    {
+      "id": "MF_19",
+      "from": "GATEWAY_CYCLE_COMPLETE",
+      "to": "T_SI_03 (View Resources/Attend)",
+      "label": "implementation time",
+      "type": "Timer-triggered loop"
+    },
+    {
+      "id": "MF_20",
+      "from": "GW_END_SEMESTER (Continue)",
+      "to": "T_SPA_04",
+      "label": "Continue monitoring",
+      "type": "Loop Flow"
+    },
+    {
+      "id": "MF_21",
+      "from": "GW_CRITICAL_ADJUST (OK)",
+      "to": "T_SPA_05",
+      "label": "OK — proceed to comprehensive assessment",
+      "type": "Conditional Flow"
+    },
+    {
+      "id": "MF_22",
+      "from": "T_SPA_05",
+      "to": "T_CDA_06",
+      "label": "Assessment results",
+      "type": "Data Flow"
+    },
+    {
+      "id": "MF_23",
+      "from": "GW_NEXT_SEMESTER (Yes)",
+      "to": "T_SI_03 or New Cycle",
+      "label": "Cycle back for new semester",
+      "type": "Loop Flow"
+    }
+  ],
+
+  "gateways_summary": [
+    {
+      "id": "GW_RISK_LEVEL",
+      "name": "Risk Level?",
+      "type": "Exclusive (XOR)",
+      "lane": "STUDENT_PROFILING_AGENT",
+      "branches": ["High", "Med", "Low"],
+      "logic": "Routes profile to Coordinator with risk classification attached"
+    },
+    {
+      "id": "GW_SEVERITY",
+      "name": "Severity?",
+      "type": "Exclusive (XOR)",
+      "lane": "PSYCHOLOGICAL_WELLNESS_AGENT",
+      "branches": ["Standard → Generate Wellness Plan", "Critical → Immediate Delivery + Human Escalation"],
+      "logic": "If screening reveals critical mental health risk, bypasses normal plan generation and escalates immediately"
+    },
+    {
+      "id": "GW_INTERVENTIONS_NEEDED",
+      "name": "Interventions Needed?",
+      "type": "Inclusive (OR) / Exclusive",
+      "lane": "COORDINATION_DECISION_AGENT",
+      "branches": ["Academic", "Social", "Wellness", "Adjust Plan (loop back)"],
+      "logic": "Can trigger one or multiple delivery streams simultaneously based on synthesized plan"
+    },
+    {
+      "id": "GW_CRITICAL_ADJUST",
+      "name": "Critical Adjust?",
+      "type": "Exclusive (XOR)",
+      "lane": "COORDINATION_DECISION_AGENT",
+      "branches": ["Critical → Human Support", "OK → Comprehensive Assessment"],
+      "logic": "Based on metric analysis: if performance is critically poor, escalates to human; otherwise flows to end-of-semester review"
+    },
+    {
+      "id": "GW_END_SEMESTER",
+      "name": "End Semester",
+      "type": "Exclusive (XOR)",
+      "lane": "STUDENT_PROFILING_AGENT",
+      "branches": ["Continue → loop back to Collect Progress Data", "End Semester → Comprehensive Assessment"],
+      "logic": "Temporal decision: continues bi-weekly monitoring until semester end is reached"
+    },
+    {
+      "id": "GW_NEXT_SEMESTER",
+      "name": "Next Semester?",
+      "type": "Exclusive (XOR)",
+      "lane": "COORDINATION_DECISION_AGENT",
+      "branches": ["Yes → loop to new cycle", "No → End"],
+      "logic": "Determines if student re-enters system for next academic term"
+    },
+    {
+      "id": "GW_SYNC",
+      "name": "Sync",
+      "type": "Parallel Gateway (AND)",
+      "lane": "INTERVENTION_DELIVERY_AGENT",
+      "branches": ["Academic Resources", "Social Mentoring", "Wellness Check"],
+      "logic": "Synchronizes parallel delivery tasks before logging completion"
+    }
+  ],
+
+  "process_flows": {
+    "happy_path": [
+      "Registration (Student)",
+      "Complete Registration",
+      "Collect Demographics",
+      "Administer Surveys",
+      "Generate Profile",
+      "Risk Level? → Low/Med/High",
+      "Receive Profile (Coordinator)",
+      "Activate Agents",
+      "Assess Skills (Academic) + Assess Social Needs + Psych Screening (parallel)",
+      "Generate Academic Plan + Generate Social Plan + Generate Wellness Plan (parallel)",
+      "Collect Responses",
+      "Synthesize Final Plan",
+      "Interventions Needed? → Yes",
+      "Deliver: Academic Resources + Social Mentoring + Wellness Check (parallel)",
+      "Sync",
+      "Log Delivery",
+      "View Resources / Attend (Student)",
+      "Cycle Complete",
+      "[Timer: 2 weeks]",
+      "Collect Progress Data",
+      "Analyze Metrics",
+      "Critical Adjust? → OK",
+      "End Semester? → End",
+      "Comprehensive Assessment",
+      "Outcome Report",
+      "Next Semester? → No → END"
+    ],
+    "critical_escalation_path": [
+      "Psych Screening → Severity? → CRITICAL",
+      "Deliver: Wellness Check (immediate)",
+      "Human Consultation",
+      "Update AI Parameters",
+      "Back to Collect Responses / Synthesize Final Plan"
+    ],
+    "feedback_adjustment_loop": [
+      "Interventions Needed? → Adjust Plan",
+      "Loop back to Collect Responses",
+      "Re-synthesize plan with updated inputs"
+    ],
+    "monitoring_loop": [
+      "2-Week Timer → Collect Progress Data → Analyze Metrics",
+      "End Semester? → Continue → Loop back to Collect Progress Data"
+    ]
+  },
+
+  "data_objects": [
+    {
+      "name": "Student Profile",
+      "created_by": "STUDENT_PROFILING_AGENT",
+      "consumed_by": ["COORDINATION_DECISION_AGENT", "All sub-agents"],
+      "contains": ["Demographics", "Survey responses", "Risk level", "Learning preferences"]
+    },
+    {
+      "name": "Academic Plan",
+      "created_by": "ACADEMIC_SUPPORT_AGENT",
+      "consumed_by": "COORDINATION_DECISION_AGENT",
+      "contains": ["Skill gaps", "Tutoring schedule", "Resource list", "Milestones"]
+    },
+    {
+      "name": "Social Plan",
+      "created_by": "SOCIAL_INTEGRATION_AGENT",
+      "consumed_by": "COORDINATION_DECISION_AGENT",
+      "contains": ["Peer mentor matches", "Club recommendations", "Check-in schedule"]
+    },
+    {
+      "name": "Wellness Plan",
+      "created_by": "PSYCHOLOGICAL_WELLNESS_AGENT",
+      "consumed_by": "COORDINATION_DECISION_AGENT",
+      "contains": ["Screening scores", "Counseling referrals", "Mindfulness resources", "Crisis plan if needed"]
+    },
+    {
+      "name": "Synthesized Final Plan",
+      "created_by": "COORDINATION_DECISION_AGENT",
+      "consumed_by": "INTERVENTION_DELIVERY_AGENT",
+      "contains": ["Merged academic + social + wellness interventions", "Priority levels", "Delivery timeline"]
+    },
+    {
+      "name": "Progress Data",
+      "created_by": "STUDENT_PROFILING_AGENT (ongoing)",
+      "consumed_by": "COORDINATION_DECISION_AGENT",
+      "contains": ["Grades", "Attendance", "Resource engagement rates", "Survey check-ins"]
+    },
+    {
+      "name": "Delivery Log",
+      "created_by": "INTERVENTION_DELIVERY_AGENT",
+      "consumed_by": "COORDINATION_DECISION_AGENT (Analyze Metrics)",
+      "contains": ["Resource IDs delivered", "Timestamps", "Student acknowledgment status"]
+    },
+    {
+      "name": "Outcome Report",
+      "created_by": "COORDINATION_DECISION_AGENT",
+      "consumed_by": "Human stakeholders / next semester cycle",
+      "contains": ["Final grades/outcomes", "Intervention effectiveness scores", "Recommendations for next cycle"]
+    }
+  ],
+
+  "implementation_notes": {
+    "agent_technology": "Each agent should be implemented as an independent microservice or LLM-powered module with defined input/output schemas.",
+    "coordination_mechanism": "The COORDINATION_DECISION_AGENT is the central orchestrator — implement as an LLM with tool-calling or an agentic framework (LangGraph, CrewAI, AutoGen etc.).",
+    "timers": "The 2-week timer should be implemented as a scheduled cron job or workflow scheduler (e.g., Temporal, Airflow, or cloud scheduler).",
+    "gateways": "Exclusive gateways map to conditional if/else logic. The parallel gateway (Sync) maps to Promise.all() or parallel task execution.",
+    "human_in_the_loop": "HUMAN_SUPPORT_SERVICES requires a human dashboard/notification system — build a case management UI for counselors.",
+    "persistence": "All data objects should be persisted to a database between steps (student profile, plans, logs) to support async multi-step workflows.",
+    "cycle_management": "The semester cycle loop requires stateful process management — use a workflow engine that supports long-running processes.",
+    "critical_path": "The CRITICAL escalation path (Psych Agent → Human Services) must be implemented with real-time alerting — not batched.",
+    "feedback_loops": "Three distinct feedback loops must be implemented: (1) plan adjustment loop, (2) monitoring loop, (3) human override loop."
+  }
+}

@@ -10,9 +10,9 @@
 
 ## 2) Active Stack in This Repo
 
-- Frontend: Next.js app in FYP_Project
-- Backend A (API Gateway + Auth + DB business layer): Node/Express in backend_express
-- Backend B (AI inference/orchestration): FastAPI in backend
+- Frontend: Next.js app in frontend
+- Backend A (API Gateway + Auth + DB business layer): Node/Express in backend-express
+- Backend B (AI inference/orchestration): FastAPI in backend-fastapi
 - Database: PostgreSQL (with pgvector expected for vector features)
 
 ## 3) Current Runtime Flow (Agent Chat)
@@ -20,9 +20,10 @@
 1. Frontend sends chat message to Express: POST /api/chat
 2. Frontend includes current in-memory chat window (recent turns) in the same request.
 3. Express authenticates user, fetches recent persisted chat turns from InteractionLog, and forwards both windows to FastAPI: POST /api/agent/chat
-4. FastAPI pipeline runs by retrieving student context from DB mirrors, building the state/persona prompt package, building a context window (session + DB), generating an AI summary of chat history for continuity, and then calling Gemini with prompt + context window + summary.
-5. FastAPI returns response + metadata (state, persona, p_mastery).
+4. FastAPI retrieves student context from DB mirrors, optionally performs lightweight routing when agent_type is coordinator/auto, applies agent-specific guardrails, builds the state/persona prompt package, builds a context window (session + DB), generates an AI summary of chat history for continuity, and then calls Gemini with prompt + context window + summary.
+5. FastAPI returns response + metadata (state, persona, p_mastery, routed_agent).
 6. Express logs user/assistant events and returns final response to frontend.
+7. FastAPI runs a background extraction step to update InitialProfile (learning_barriers_score, wellness_support_needed, social_support_needed) based on the latest conversation summary.
 
 ## 3.1) Current Runtime Flow (Onboarding)
 
@@ -76,31 +77,33 @@ Why this matters:
 
 ## 4) Key Files (Do Not Break)
 
-- Express entry: backend_express/server.js
-- Express chat proxy: backend_express/controllers/chatController.js
-- Express onboarding bridge: backend_express/controllers/onboardingControllers.js
-- FastAPI entry: backend/main.py
-- FastAPI router: backend/routers/agent_router.py
-- FastAPI Gemini adapter: backend/services/gemini_agent.py
-- Shared frontend API config: FYP_Project/lib/api.ts
+- Express entry: backend-express/server.js
+- Express chat proxy: backend-express/controllers/chatController.js
+- Express onboarding bridge: backend-express/controllers/onboardingControllers.js
+- FastAPI entry: backend-fastapi/main.py
+- FastAPI router: backend-fastapi/routers/agent_router.py
+- FastAPI Gemini adapter: backend-fastapi/services/gemini_agent.py
+- Shared frontend API config: frontend/lib/api.ts
 
 ## 5) Environment Sync Contract
 
-- Express .env (backend_express/.env):
+- Express .env (backend-express/.env):
   - PORT=4000
   - FASTAPI_BASE_URL=<http://localhost:8080> (FastAPI backend on port 8080 due to local port conflict)
   - DATABASE_URL=postgres://...
   - JWT_SECRET=...
-- FastAPI .env (backend/.env):
+- FastAPI .env (backend-fastapi/.env):
   - DATABASE_URL=postgresql+psycopg://... (or normalized equivalent)
-  - GEMINI_API_KEY=... (required for real Gemini API responses)
-  - GEMINI_MODEL=gemini-flash-latest (or other available model)
+  - GITHIB_API_URl=https://models.inference.ai.azure.com (GitHub Models base URL; typo preserved per project)
+  - GITHUB_TOKEN=... (GitHub Personal Access Token used as API key)
+  - GITHUB_MODEL=gpt-4o-mini (or another available GitHub Models chat model)
+  - (optional legacy) GEMINI_API_KEY=... / GEMINI_MODEL=... if you keep Gemini around
 
 Rule: Frontend should call only Express base URL. Express talks to FastAPI via FASTAPI_BASE_URL.
 
 ## 6) Frontend API Rule
 
-- Use FYP_Project/lib/api.ts for all frontend network calls.
+- Use frontend/lib/api.ts for all frontend network calls.
 - Avoid hardcoding localhost ports inside components/pages.
 - Preferred usage:
   - buildApiUrl("/api/chat")
@@ -138,6 +141,7 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
 - In progress:
   - pgvector-first semantic memory flow hardening
   - full production-grade endpoint integration and deployment readiness
+  - post-chat profile update tuning (LLM extraction prompts)
 
 ## 8) Known Risks / Notes
 
@@ -163,7 +167,7 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
 ## 10) Immediate Next Steps
 
 - Validate pgvector extension setup locally or move DB to Neon/Supabase with pgvector enabled.
-- Keep frontend API calls centralized in FYP_Project/lib/api.ts.
+- Keep frontend API calls centralized in frontend/lib/api.ts.
 - Remove/retire stale OpenAI-only service path if no longer needed.
 - Retrain and re-export initial profiling model artifacts with the currently pinned scikit-learn version to remove compatibility debt.
 
@@ -176,6 +180,8 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
   - Frontend sends chatHistory
   - Express adds database_chat_history
   - FastAPI summarizes + injects continuity context into Gemini prompt
+- Academic agent guardrail:
+  - If a message is about stress/mental health/social issues, Academic replies with the exact Wellness handoff sentence.
 - Response quality policy for active chat pipeline:
   - Do not force ultra-short replies by default.
   - Prefer complete, coherent answers unless the student explicitly requests short output.

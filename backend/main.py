@@ -11,7 +11,6 @@ from uuid import uuid4
 
 from ai_service import predict_initial_profile
 from services.trend_engine import analyze_student_state
-from services.chat_service import generate_agent_response
 from routers.agent_router import router as agent_router
 
 logger = logging.getLogger(__name__)
@@ -168,11 +167,6 @@ class AnalyzeStateRequest(BaseModel):
     recent_boredom: List[float]       # last 5-7 boredom scores [0,1]
 
 
-class ChatRequest(BaseModel):
-    agent_type: str                       # academic | wellness | social | coordinator | tutor
-    message: str
-    student_context: Dict[str, Any]       # profile data passed from Express
-    chat_history: Optional[List[Dict[str, str]]] = None  # [{role, content}]
 
 
 # ---------------------------------------------------------------------------
@@ -262,24 +256,3 @@ async def get_bkt_params_endpoint(skill_name: str):
     params = get_bkt_params(skill_name)
     return {"skillName": skill_name, "params": params}
 
-
-@app.post("/api/chat")
-async def chat_endpoint(payload: ChatRequest):
-    """
-    LLM chat endpoint. Called by Express to generate agent responses.
-    Returns the AI agent's reply string.
-    """
-    valid_agents = {"academic", "wellness", "social", "coordinator", "tutor"}
-    if payload.agent_type not in valid_agents:
-        raise HTTPException(status_code=400, detail=f"Invalid agent_type. Must be one of: {valid_agents}")
-
-    try:
-        response = generate_agent_response(
-            agent_type=payload.agent_type,
-            message=payload.message,
-            student_context=payload.student_context,
-            chat_history=payload.chat_history,
-        )
-        return {"agent": payload.agent_type, "response": response}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat Engine Error: {str(e)}")

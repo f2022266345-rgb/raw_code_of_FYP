@@ -38,18 +38,121 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from db import get_db, AgentMemoryORM
+from db import get_db, AgentMemoryORM, InitialProfileORM, SessionLocal
 from services.context_retriever import get_student_context
 from services.state_engine import build_prompt_package, PROMPT_TEMPLATE_A, PROMPT_TEMPLATE_B, PROMPT_TEMPLATE_C
-from services.gemini_agent import call_gemini, summarize_conversation_memory
+from services.gemini_agent import call_gemini, summarize_conversation_memory, extract_profile_updates
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["Agent Orchestration"])
+
+ACADEMIC_REFERRAL_TEXT = (
+    "It sounds like you're dealing with some pressure right now. I want to make sure you get the right support—"
+    "please ask the Wellness Agent about this, as they are equipped to help you feel better."
+)
+
+WELLNESS_KEYWORDS = {
+    "stress",
+    "stressed",
+    "anxiety",
+    "anxious",
+    "panic",
+    "depression",
+    "depressed",
+    "sad",
+    "mental",
+    "wellness",
+    "overwhelmed",
+    "burnout",
+}
+
+SOCIAL_KEYWORDS = {
+    "friends",
+    "friend",
+    "social",
+    "lonely",
+    "isolation",
+    "peer",
+    "group",
+    "community",
+    "team",
+}
+
+
+def _route_agent(message: str) -> dict:
+    text = (message or "").lower()
+    if any(keyword in text for keyword in WELLNESS_KEYWORDS):
+        return {"routeTo": "wellness", "reason": "wellness_keywords"}
+    if any(keyword in text for keyword in SOCIAL_KEYWORDS):
+        return {"routeTo": "social", "reason": "social_keywords"}
+    return {"routeTo": "academic", "reason": "default_academic"}
+
+
+def _should_redirect_to_wellness(message: str) -> bool:
+    text = (message or "").lower()
+    return any(keyword in text for keyword in WELLNESS_KEYWORDS)
+
+
+def _format_chat_for_updates(chat_history: List[dict], database_chat_history: List[dict], message: str, response: str) -> str:
+    lines = []
+    for item in (database_chat_history or [])[-6:]:
+        role = "Assistant" if item.get("role") == "assistant" else "Student"
+        content = str(item.get("content", "")).strip()
+        if content:
+            lines.append(f"[DB] {role}: {content}")
+    for item in (chat_history or [])[-6:]:
+        role = "Assistant" if item.get("role") == "assistant" else "Student"
+        content = str(item.get("content", "")).strip()
+        if content:
+            lines.append(f"[Session] {role}: {content}")
+    if message:
+        lines.append(f"[Current] Student: {message}")
+    if response:
+        lines.append(f"[Current] Assistant: {response}")
+    return "\n".join(lines)
+
+
+def _update_profile_from_chat(
+    user_id: str,
+    skill_name: str,
+    agent_type: str,
+    message: str,
+    response: str,
+    chat_history: List[dict],
+    database_chat_history: List[dict],
+) -> None:
+    db = SessionLocal()
+    try:
+        profile = db.query(InitialProfileORM).filter(InitialProfileORM.user_id == user_id).first()
+        if not profile:
+            return
+
+        conversation_text = _format_chat_for_updates(chat_history, database_chat_history, message, response)
+        updates = extract_profile_updates(conversation_text)
+
+        if isinstance(updates, dict):
+            score = updates.get("learning_barriers_score")
+            wellness_needed = updates.get("wellness_support_needed")
+            social_needed = updates.get("social_support_needed")
+
+            if isinstance(score, (int, float)):
+                profile.learning_barriers_score = max(0.0, min(float(score), 1.0))
+            if isinstance(wellness_needed, bool):
+                profile.wellness_support_needed = wellness_needed
+            if isinstance(social_needed, bool):
+                profile.social_support_needed = social_needed
+
+            db.commit()
+    except Exception as exc:
+        logger.warning("Profile update failed: %s", exc)
+        db.rollback()
+    finally:
+        db.close()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -204,7 +307,11 @@ def _dominant_style(styles: dict) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/chat", response_model=AgentChatResponse, summary="State-Driven Agent Chat")
-async def agent_chat(payload: AgentChatRequest, db: Session = Depends(get_db)):
+async def agent_chat(
+    payload: AgentChatRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """
     **Main Orchestration Endpoint** (Task 5).
 
@@ -229,35 +336,56 @@ async def agent_chat(payload: AgentChatRequest, db: Session = Depends(get_db)):
         skill_name=payload.skill_name,
     )
 
+    routed_agent = payload.agent_type
+    routing_decision = None
+    if payload.agent_type in {"coordinator", "router", "auto"}:
+        routing_decision = _route_agent(payload.message)
+        routed_agent = routing_decision.get("routeTo", "academic")
+
     # ── Task 2: State + Prompt Engineering ───────────────────────────────
     prompt_pkg = build_prompt_package(
         ctx=ctx,
         user_message=payload.message,
         student_name=payload.student_name,
-        agent_type=payload.agent_type,
+        agent_type=routed_agent,
         orchestration_context=payload.orchestration_context,
     )
 
     # ── Task 4: Token-Optimized Gemini Call ──────────────────────────────
-    response_text = call_gemini(
-        system_instruction=prompt_pkg.system_instruction,
-        user_message=prompt_pkg.user_message,
-        needs_pgvector=prompt_pkg.needs_pgvector,
-        skill_name=payload.skill_name,
-        db=db,
-        chat_history=payload.chat_history,
-        database_chat_history=payload.database_chat_history,
-    )
+    if routed_agent == "academic" and _should_redirect_to_wellness(payload.message):
+        response_text = ACADEMIC_REFERRAL_TEXT
+    else:
+        response_text = call_gemini(
+            system_instruction=prompt_pkg.system_instruction,
+            user_message=prompt_pkg.user_message,
+            needs_pgvector=prompt_pkg.needs_pgvector,
+            skill_name=payload.skill_name,
+            db=db,
+            chat_history=payload.chat_history,
+            database_chat_history=payload.database_chat_history,
+            user_id=payload.user_id,
+        )
 
     # Approximate token count for response metadata
     from services.gemini_agent import _count_tokens_approx, _truncate_to_token_limit
     token_count = _count_tokens_approx(prompt_pkg.system_instruction)
 
+    background_tasks.add_task(
+        _update_profile_from_chat,
+        payload.user_id,
+        payload.skill_name,
+        routed_agent,
+        payload.message,
+        response_text,
+        payload.chat_history,
+        payload.database_chat_history,
+    )
+
     return AgentChatResponse(
-        agent_type=payload.agent_type,
+        agent_type=routed_agent,
         response=response_text,
-        routed_agent=payload.agent_type,
-        coordinator_decision=payload.orchestration_context.get("coordinatorDecision"),
+        routed_agent=routed_agent,
+        coordinator_decision=routing_decision or payload.orchestration_context.get("coordinatorDecision"),
         state=prompt_pkg.state,
         persona=prompt_pkg.persona,
         p_mastery=ctx.p_mastery,
@@ -266,6 +394,21 @@ async def agent_chat(payload: AgentChatRequest, db: Session = Depends(get_db)):
         system_instruction_tokens=token_count,
         system_instruction_preview=prompt_pkg.system_instruction[:100],
     )
+
+
+
+@router.post(
+    "/router",
+    summary="Lightweight Router Model — returns routing decision JSON",
+)
+async def router_classify(payload: dict):
+    """
+    Lightweight routing endpoint used by Express to decide which agent should
+    handle an incoming message. Returns a JSON like {"routeTo": "wellness", "reason": "wellness_keywords"}.
+    """
+    message = str(payload.get("message") or "")
+    decision = _route_agent(message)
+    return {"decision": decision}
 
 
 @router.post(
