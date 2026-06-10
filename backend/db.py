@@ -13,7 +13,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, rela
 from pgvector.sqlalchemy import Vector
 
 
-EMBEDDING_DIM = 256
+EMBEDDING_DIM = 1536
 
 
 def _now_utc() -> datetime:
@@ -27,7 +27,7 @@ def _normalize_database_url(raw_url: str) -> str:
 
 
 DATABASE_URL = _normalize_database_url(
-    os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/fyp_db")
+    os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/FYP_backup")
 )
 
 
@@ -105,6 +105,27 @@ class ChatMessageORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
 
     session = relationship("SessionORM", back_populates="chat_messages")
+
+
+class StudentModelEmbeddingORM(Base):
+    __tablename__ = "student_model_embeddings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    summary_text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+class EpisodicMemoryORM(Base):
+    __tablename__ = "episodic_memory"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    summary_text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
 
 
 class KnowledgeChunkORM(Base):
@@ -229,6 +250,89 @@ class AgentMemoryORM(Base):
     cognitive_state: Mapped[str | None] = mapped_column(String(100), nullable=True)  # FLOW_STATE | CRITICAL_STRUGGLE ...
     # Free-form JSON for agent-specific payload
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+class AcademicPlanORM(Base):
+    __tablename__ = "academic_plans"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    skill_gaps: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    tutoring_schedule: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    resources: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    milestones: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+class SocialPlanORM(Base):
+    __tablename__ = "social_plans"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    peer_mentor_match: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    club_recommendations: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    check_in_schedule: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    workshops: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+class WellnessPlanORM(Base):
+    __tablename__ = "wellness_plans"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(24), default="Standard")
+    counseling_referral: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    resources: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    crisis_plan: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+class SynthesizedPlanORM(Base):
+    __tablename__ = "synthesized_plans"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    academic_plan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    social_plan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    wellness_plan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    priority_level: Mapped[str] = mapped_column(String(24), default="Standard")
+    intervention_flags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+class DeliveryLogORM(Base):
+    __tablename__ = "deliveries"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String(24), nullable=False)
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+    channel: Mapped[str] = mapped_column(String(24), default="portal")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+class ProgressSnapshotORM(Base):
+    __tablename__ = "progress_snapshots"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    grades: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    attendance_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    engagement_metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+class OutcomeReportORM(Base):
+    __tablename__ = "outcome_reports"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    semester: Mapped[str] = mapped_column(String(24), nullable=False)
+    initial_risk_level: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    final_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    effectiveness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    recommendations_next_cycle: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
 
 

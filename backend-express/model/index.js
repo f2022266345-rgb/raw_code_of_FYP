@@ -7,6 +7,10 @@ import SocialMetrics from "./SocialMetrics.js";
 import WellnessLog from "./WellnessLog.js";
 import ChatThread from "./ChatThread.js";
 import ChatMessage from "./ChatMessage.js";
+import CounselorCase from "./CounselorCase.js";
+import BktSkillMastery from "./BktSkillMastery.js";
+import StudentProfileState from "./StudentProfileState.js";
+import InteractionLog from "./InteractionLog.js";
 
 const db = {
   User,
@@ -17,6 +21,10 @@ const db = {
   WellnessLog,
   ChatThread,
   ChatMessage,
+  CounselorCase,
+  BktSkillMastery,
+  StudentProfileState,
+  InteractionLog,
   sequelize,
 };
 
@@ -109,6 +117,19 @@ ChatMessage.belongsTo(ChatThread, {
   foreignKey: "threadId",
   targetKey: "id",
   as: "thread",
+});
+
+// ── User → CounselorCase (one-to-many) ───────────────────────────
+User.hasMany(CounselorCase, {
+  foreignKey: "userId",
+  sourceKey: "id",
+  as: "counselorCases",
+  onDelete: "CASCADE",
+});
+CounselorCase.belongsTo(User, {
+  foreignKey: "userId",
+  targetKey: "id",
+  as: "student",
 });
 
 export default db;

@@ -10,14 +10,20 @@ import BktRoutes from "./routes/bktRoutes.js";
 import ChatRoutes from "./routes/chatRoutes.js";
 import WebhookRoutes from "./routes/webhookRoutes.js";
 import ClerkAuthRoutes from "./routes/clerkAuthRoutes.js";
+import CounselorRoutes from "./routes/counselorRoutes.js";
+import "./services/cronJobs.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 
+const allowedOrigin = process.env.FRONTEND_URL && process.env.FRONTEND_URL !== "*"
+  ? process.env.FRONTEND_URL
+  : "http://localhost:3000";
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: allowedOrigin,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
@@ -45,6 +51,7 @@ app.use("/api/dashboard", requireAuth, DashboardRoutes);
 app.use("/api/observations", requireAuth, ObservationsRoutes);
 app.use("/api/bkt", requireAuth, BktRoutes);
 app.use("/api/chat", requireAuth, ChatRoutes);
+app.use("/api/counselor", requireAuth, CounselorRoutes);
 
 app.get("/", (_req, res) => {
   res.json({ message: "AI Academy Backend is running", version: "3.0.0" });

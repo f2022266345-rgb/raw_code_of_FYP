@@ -242,6 +242,11 @@ def build_prompt_package(
         " Keep cognitive load manageable by chunking explanation into short progressive steps."
     )
 
+    if getattr(ctx, 'student_model_summary', None):
+        orchestration_note += f"\nStudent Model (Vibe Check): {ctx.student_model_summary}"
+    if getattr(ctx, 'episodic_memory_summary', None):
+        orchestration_note += f"\nPast Relevant Memory: {ctx.episodic_memory_summary}"
+
     if coordinator_decision:
         orchestration_note += (
             f" Coordinator routing rationale: {coordinator_decision.get('matchedRule', 'n/a')}"

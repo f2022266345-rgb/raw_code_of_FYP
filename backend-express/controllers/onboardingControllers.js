@@ -183,6 +183,7 @@ const onboardingController = async (req, res) => {
             learningPreferences,
             culturalContext,
             diagnosticAssessment: diagnosticAssessment || null,
+            userId,
           }),
         },
       );

@@ -2,8 +2,10 @@ import csv
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from db import get_db
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -159,6 +161,8 @@ class InitialProfilingRequest(BaseModel):
     learningPreferences: Dict[str, Any]
     culturalContext: Dict[str, Any]
     diagnosticAssessment: Optional[Dict[str, Any]] = None
+    userId: Optional[str] = None
+    diagnosticAssessment: Optional[Dict[str, Any]] = None
 
 
 class AnalyzeStateRequest(BaseModel):
@@ -183,16 +187,33 @@ async def health():
 
 
 @app.post("/api/predict/initial-profile")
-async def predict_initial_profile_endpoint(payload: InitialProfilingRequest):
+async def predict_initial_profile_endpoint(payload: InitialProfilingRequest, db: Session = Depends(get_db)):
     """
     Receives onboarding data from Express, runs ML inference,
     and returns the full profile including bloom level, language risk, and active agents.
+    Also saves the structured data to pgvector.
     """
+    import json
+    from uuid import uuid4
+    from db import StudentModelEmbeddingORM
     try:
         prediction_result = predict_initial_profile(payload.dict())
         print("Prediction Result: ",prediction_result)
+        
+        learner_id = payload.userId or str(uuid4())
+        summary_text = json.dumps(prediction_result)
+        
+        # Save to pgvector DB (using dummy 1536d vector for now)
+        snapshot = StudentModelEmbeddingORM(
+            user_id=learner_id,
+            summary_text=summary_text,
+            embedding=[0.0] * 1536
+        )
+        db.add(snapshot)
+        db.commit()
+
         return {
-            "persistentLearnerId": str(uuid4()),
+            "persistentLearnerId": learner_id,
             "prediction": prediction_result,
         }
     except Exception as e:

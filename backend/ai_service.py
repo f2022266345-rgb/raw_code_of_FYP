@@ -13,12 +13,8 @@ try:
     model_path = os.path.join(os.path.dirname(__file__), 'student_model.pkl')
     encoder_path = os.path.join(os.path.dirname(__file__), 'encoders.pkl')
 
-    # The serialized artifacts were trained on an older sklearn version.
-    # Keep runtime stable by loading them while suppressing known version-noise.
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
-        student_model = joblib.load(model_path)
-        encoders = joblib.load(encoder_path)
+    student_model = joblib.load(model_path)
+    encoders = joblib.load(encoder_path)
 except Exception as e:
     print(f"Warning: ML Models not loaded. Using fallback logic. Error: {e}")
     student_model = None

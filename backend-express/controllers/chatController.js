@@ -119,6 +119,9 @@ const chatWithAgent = async (req, res) => {
       threadId,
     });
 
+    const userRecord = await db.User.findByPk(userId);
+    const actualStudentName = userRecord ? userRecord.fullName : (req.user?.fullName || "the student");
+
     const diagnosticProfile = await DiagnosticProfile.findOne({ where: { userId } });
     const academicRows = await AcademicProgress.findAll({ where: { userId }, limit: 8 });
     const databaseChatHistory = await buildDatabaseChatHistory({
@@ -172,16 +175,21 @@ const chatWithAgent = async (req, res) => {
 
     let chatData;
     try {
-      chatData = await _postFastApiJson("/api/agent/chat", {
-        user_id: userId,
+      const payload = {
+        user_id: userRecord ? userRecord.id : userId,
+        thread_id: thread.id,
         skill_name: skillName,
         message,
         agent_type: routedAgentType,
-        student_name: req.user?.fullName || "the student",
+        student_name: actualStudentName,
         chat_history: normalizedFrontendHistory,
         database_chat_history: databaseChatHistory,
         orchestration_context: orchestrationContext,
-      });
+        stream: true
+      };
+
+      // ── Stream endpoint unavailable/disabled — use /api/agent/chat ────────
+      chatData = await _postFastApiJson("/api/agent/chat", payload);
     } catch (fetchError) {
       console.error("FastAPI agent/chat connection error:", fetchError);
       const fallback =

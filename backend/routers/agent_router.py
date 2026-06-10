@@ -133,6 +133,8 @@ def _update_profile_from_chat(
             return
 
         conversation_text = _format_chat_for_updates(chat_history, database_chat_history, message, response)
+        from services.gemini_agent import summarize_and_embed_episodic_memory
+        summarize_and_embed_episodic_memory(db, user_id, conversation_text)
         updates = extract_profile_updates(conversation_text)
 
         if isinstance(updates, dict):
@@ -261,6 +263,11 @@ class MemorySummaryResponse(BaseModel):
     summary: str
 
 
+class OnboardingSynthesizeRequest(BaseModel):
+    user_id: str
+    raw_profile_text: str
+
+
 class StudentContextResponse(BaseModel):
     """Debug endpoint — returns raw StudentContext without calling LLM."""
     user_id: str
@@ -334,6 +341,7 @@ async def agent_chat(
         db=db,
         user_id=payload.user_id,
         skill_name=payload.skill_name,
+        user_message=payload.message,
     )
 
     routed_agent = payload.agent_type
@@ -555,3 +563,293 @@ async def memory_summary(payload: MemorySummaryRequest):
     )
 
     return MemorySummaryResponse(topic=payload.topic, summary=summary)
+
+
+@router.post("/onboarding/synthesize", summary="Synthesize onboarding profile into pgvector")
+async def onboarding_synthesize(
+    payload: OnboardingSynthesizeRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    from services.gemini_agent import synthesize_and_embed_student_profile
+    background_tasks.add_task(
+        synthesize_and_embed_student_profile,
+        db,
+        payload.user_id,
+        payload.raw_profile_text
+    )
+    return {"status": "synthesis_started"}
+
+
+class StreamRequest(BaseModel):
+    user_id: str
+    thread_id: str
+    message: str
+    skill_name: Optional[str] = None
+    agent_type: Optional[str] = None
+    student_name: Optional[str] = None
+    chat_history: Optional[list] = None
+    database_chat_history: Optional[list] = None
+    orchestration_context: Optional[dict] = None
+    stream: Optional[bool] = None
+
+    class Config:
+        extra = "ignore"
+
+
+@router.post("/stream", summary="Stream LangGraph response via SSE")
+async def stream_agent(payload: StreamRequest):
+    import json
+    from fastapi.responses import StreamingResponse
+    from langchain_core.messages import HumanMessage
+    import os
+    from app.graph.workflow import builder
+    from langgraph.store.memory import InMemoryStore
+
+    async def event_generator():
+        try:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+            raw_db_url = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/FYP_backup")
+            db_url = raw_db_url.replace("+psycopg", "")
+            # Using native AsyncPostgresSaver as requested in Part 1
+            async with AsyncPostgresSaver.from_conn_string(db_url) as checkpointer:
+                await checkpointer.setup()
+                
+                store = InMemoryStore()
+                graph = builder.compile(checkpointer=checkpointer, store=store)
+                
+                config = {
+                    "configurable": {
+                        "thread_id": payload.thread_id,
+                        "user_id": payload.user_id
+                    }
+                }
+                
+                state = {
+                    "messages": [HumanMessage(content=payload.message)],
+                    "user_id": payload.user_id,
+                    "thread_id": payload.thread_id,
+                    "active_agent": "academic",
+                    "risk_level": "Standard",
+                    "student_context": {}
+                }
+                # Using astream_events to yield tokens as they arrive
+                async for event in graph.astream_events(state, config, version="v2"):
+                    kind = event["event"]
+                    if kind == "on_chat_model_stream":
+                        chunk = event["data"]["chunk"]
+                        if hasattr(chunk, "content") and chunk.content:
+                            yield f"data: {json.dumps({'token': chunk.content})}\n\n"
+                
+                # Retrieve final state and attach UI Tool Window Sync metadata
+                final_state = await graph.aget_state(config)
+                agent = final_state.values.get("active_agent", "academic")
+                
+                # Mock extracting youtube_links for now, typically this would be parsed from state
+                # or from a specific ToolMessage inside final_state.values["messages"]
+                metadata = {
+                    "active_agent": agent,
+                    "youtube_links": ["https://youtube.com/watch?v=dQw4w9WgXcQ"] if agent == "academic" else []
+                }
+                yield f"data: {json.dumps({'metadata': metadata})}\n\n"
+                yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+class AnalyzeMetricsRequest(BaseModel):
+    user_id: str
+
+@router.post("/metrics/analyze", summary="Triggered by Express Cron to analyze 2-week progress")
+async def analyze_metrics(payload: AnalyzeMetricsRequest, db: Session = Depends(get_db)):
+    """
+    Called by the Express node-cron scheduler every 2 weeks per user.
+    Tries to run the Semester LangGraph Workflow. Falls back to a direct
+    DB-query + LLM analysis if LangGraph dependencies are not available.
+    """
+    try:
+        from app.graph.semester_graph import semester_graph
+        state_input = {
+            "user_id": payload.user_id,
+            "data": {},
+            "analysis": "",
+            "is_critical": False
+        }
+        final_state = await semester_graph.ainvoke(state_input)
+        return {
+            "status": "Critical" if final_state.get("is_critical") else "OK",
+            "message": f"Semester graph completed for user {payload.user_id}",
+            "analysis": final_state.get("analysis", ""),
+            "progress_data": final_state.get("data", {}),
+        }
+    except ImportError:
+        logger.warning("LangGraph not available — running direct metrics analysis fallback.")
+    except Exception as exc:
+        logger.warning("Semester graph failed (%s) — falling back to direct analysis.", exc)
+
+    # ── Direct fallback: query DB + call LLM directly ─────────────────────────
+    try:
+        import json
+        from datetime import datetime, timedelta, timezone
+        from db import BktSkillMasteryORM, InteractionLogORM, ProgressSnapshotORM
+        from services.gemini_agent import _get_openai_client, _iter_model_candidates
+
+        now = datetime.now(timezone.utc)
+        two_weeks_ago = now - timedelta(days=14)
+
+        logs = db.query(InteractionLogORM).filter(
+            InteractionLogORM.user_id == payload.user_id,
+            InteractionLogORM.created_at >= two_weeks_ago
+        ).all()
+
+        bkt = db.query(BktSkillMasteryORM).filter(
+            BktSkillMasteryORM.user_id == payload.user_id
+        ).all()
+
+        grades = {s.skill_name: s.p_mastery for s in bkt}
+        attendance = min(len(logs) / 14.0, 1.0) if logs else 0.0
+        progress_data = {
+            "grades": grades,
+            "attendance_rate": attendance,
+            "total_interactions_last_14_days": len(logs),
+        }
+
+        # Snapshot
+        snapshot = ProgressSnapshotORM(
+            user_id=payload.user_id,
+            grades=grades,
+            attendance_rate=attendance,
+            engagement_metrics={"total_interactions": len(logs)},
+        )
+        db.add(snapshot)
+        db.commit()
+
+        # LLM analysis
+        client = _get_openai_client()
+        is_critical = False
+        analysis = "Automated analysis unavailable."
+
+        if client:
+            prompt = (
+                f"You are an automated academic evaluator. Analyze this 14-day student progress:\n"
+                f"{json.dumps(progress_data, indent=2)}\n\n"
+                "If the student has very low mastery (p_mastery < 0.2 across most skills) or near-zero "
+                "attendance, set is_critical=true. Otherwise is_critical=false.\n"
+                "Respond ONLY with valid JSON: {\"analysis\": \"...\", \"is_critical\": true/false}"
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model=_iter_model_candidates()[0],
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=300,
+                )
+                result = json.loads(resp.choices[0].message.content)
+                is_critical = result.get("is_critical", False)
+                analysis = result.get("analysis", "")
+            except Exception as llm_exc:
+                logger.warning("LLM analysis failed: %s", llm_exc)
+                # Simple rule-based fallback
+                avg_mastery = sum(grades.values()) / len(grades) if grades else 0
+                is_critical = avg_mastery < 0.2 or attendance < 0.1
+                analysis = f"Rule-based: avg_mastery={avg_mastery:.2f}, attendance={attendance:.2f}"
+
+        return {
+            "status": "Critical" if is_critical else "OK",
+            "message": f"Direct analysis completed for user {payload.user_id}",
+            "analysis": analysis,
+            "progress_data": progress_data,
+        }
+    except Exception as fallback_exc:
+        logger.error("Metrics analysis fallback also failed: %s", fallback_exc)
+        return {
+            "status": "OK",
+            "message": "Analysis could not be completed",
+            "analysis": str(fallback_exc),
+            "progress_data": {},
+        }
+
+
+# ─── Human Counselor: Apply parameter updates ─────────────────────────────────
+
+class CounselorUpdateRequest(BaseModel):
+    user_id: str
+    case_id: Optional[str] = None
+    counselor_notes: Optional[str] = ""
+    updates: dict = Field(default_factory=dict)
+    # updates can contain: pacing, chunking, languageSupport, wellness_support_needed,
+    # social_support_needed, learning_barriers_score, bloom_level, etc.
+
+@router.post("/counselor/apply-updates", summary="Apply human counselor parameter updates to student profile")
+async def counselor_apply_updates(payload: CounselorUpdateRequest, db: Session = Depends(get_db)):
+    """
+    Called by Express when a human counselor reviews and submits parameter updates
+    for a student's case. Updates the InitialProfileORM so the next tutoring
+    session reflects the counselor's intervention.
+    """
+    try:
+        profile = db.query(InitialProfileORM).filter(
+            InitialProfileORM.user_id == payload.user_id
+        ).first()
+
+        if not profile:
+            raise HTTPException(status_code=404, detail=f"No profile found for user {payload.user_id}")
+
+        applied = {}
+        updates = payload.updates
+
+        # Bloom level adjustment
+        if "bloom_level" in updates and isinstance(updates["bloom_level"], int):
+            profile.bloom_level = max(1, min(6, updates["bloom_level"]))
+            applied["bloom_level"] = profile.bloom_level
+
+        # Learning barriers
+        if "learning_barriers_score" in updates:
+            val = float(updates["learning_barriers_score"])
+            profile.learning_barriers_score = max(0.0, min(1.0, val))
+            applied["learning_barriers_score"] = profile.learning_barriers_score
+
+        # Wellness / social flags
+        if "wellness_support_needed" in updates and isinstance(updates["wellness_support_needed"], bool):
+            profile.wellness_support_needed = updates["wellness_support_needed"]
+            applied["wellness_support_needed"] = profile.wellness_support_needed
+
+        if "social_support_needed" in updates and isinstance(updates["social_support_needed"], bool):
+            profile.social_support_needed = updates["social_support_needed"]
+            applied["social_support_needed"] = profile.social_support_needed
+
+        # Cognitive rules (pacing, chunking, languageSupport)
+        cognitive_keys = ["pacing", "chunking", "languageSupport"]
+        cognitive_updates = {k: updates[k] for k in cognitive_keys if k in updates}
+        if cognitive_updates:
+            existing_rules = profile.cognitive_rules or {}
+            existing_rules.update(cognitive_updates)
+            if payload.counselor_notes:
+                existing_rules["counselor_notes"] = payload.counselor_notes[:512]
+            if payload.case_id:
+                existing_rules["last_case_id"] = payload.case_id
+            profile.cognitive_rules = existing_rules
+            applied["cognitive_rules"] = cognitive_updates
+
+        db.commit()
+        logger.info(
+            "Counselor updates applied for user %s (case=%s): %s",
+            payload.user_id, payload.case_id, applied
+        )
+
+        return {
+            "success": True,
+            "user_id": payload.user_id,
+            "case_id": payload.case_id,
+            "applied": applied,
+            "message": "Student profile updated with counselor parameters. Changes take effect on next chat."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("counselor_apply_updates failed: %s", exc)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc))

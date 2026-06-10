@@ -71,6 +71,10 @@ class StudentContext:
     wellness_sentiment: Optional[str] = None      # Latest sentiment from Wellness Agent
     cognitive_state: Optional[str] = None         # FLOW_STATE | CRITICAL_STRUGGLE etc.
 
+    # ── From Long-Term Episodic & Profile Memory ────────────────────────────
+    episodic_memory_summary: Optional[str] = None
+    student_model_summary: Optional[str] = None
+
     # ── Derived helpers ─────────────────────────────────────────────────────
     @property
     def effective_mood(self) -> str:
@@ -100,6 +104,7 @@ def get_student_context(
     db: Session,
     user_id: str,
     skill_name: str,
+    user_message: str = "",
 ) -> StudentContext:
     """
     Performs 4 targeted database queries and assembles a StudentContext.
@@ -194,5 +199,33 @@ def get_student_context(
     except Exception as exc:
         logger.error("AgentMemory query failed: %s", exc)
         db.rollback()
+
+    # ── Query 5: Long-Term Profile (vibe check) ──────────────────────────────
+    try:
+        from db import StudentModelEmbeddingORM
+        student_model = db.query(StudentModelEmbeddingORM).filter_by(user_id=user_id).first()
+        if student_model:
+            ctx.student_model_summary = student_model.summary_text
+    except Exception as exc:
+        logger.error("StudentModelEmbedding query failed: %s", exc)
+        db.rollback()
+
+    # ── Query 6: Long-Term Episodic Memory (Cosine Similarity) ───────────────
+    if user_message:
+        try:
+            from db import EpisodicMemoryORM
+            from services.gemini_agent import generate_embedding
+            embedding = generate_embedding(user_message)
+            episodic = (
+                db.query(EpisodicMemoryORM)
+                .filter(EpisodicMemoryORM.user_id == user_id)
+                .order_by(EpisodicMemoryORM.embedding.cosine_distance(embedding))
+                .first()
+            )
+            if episodic:
+                ctx.episodic_memory_summary = episodic.summary_text
+        except Exception as exc:
+            logger.error("EpisodicMemory query failed: %s", exc)
+            db.rollback()
 
     return ctx

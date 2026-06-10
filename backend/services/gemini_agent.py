@@ -96,6 +96,45 @@ def _get_openai_client():
 # Token counter (approximate)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def generate_embedding(text: str) -> list[float]:
+    """Generates a 1536-dimensional embedding using an embedding model.
+    Uses Gemini's embedding model and pads to 1536 dims to match DB schema.
+    """
+    if not text.strip():
+        return [0.0] * 1536
+    try:
+        import os
+        from google import genai
+        
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_key:
+            logger.warning("GEMINI_API_KEY not set. Using zero vector.")
+            return [0.0] * 1536
+            
+        client = genai.Client(api_key=gemini_key)
+        embedding_model = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+            
+        response = client.models.embed_content(
+            model=embedding_model,
+            contents=text
+        )
+        
+        embedding = response.embeddings[0].values
+        if not embedding:
+            logger.warning("Empty embedding returned from Gemini. Using zero vector.")
+            return [0.0] * 1536
+            
+        if len(embedding) < 1536:
+            embedding.extend([0.0] * (1536 - len(embedding)))
+        elif len(embedding) > 1536:
+            embedding = embedding[:1536]
+            
+        return embedding
+    except Exception as exc:
+        logger.error("Embedding generation failed: %s", exc)
+        return [0.0] * 1536
+
+
 def _count_tokens_approx(text: str) -> int:
     """
     Approximate token count — splits on whitespace + punctuation.
@@ -273,13 +312,10 @@ def _fetch_pgvector_context(
     """
     try:
         from db import KnowledgeChunkORM
-        # Keyword-based fallback (non-embedding path for now)
-        # Replace with cosine similarity once embedding model is wired
+        embedding = generate_embedding(user_message)
         chunks = (
             db.query(KnowledgeChunkORM)
-            .filter(
-                KnowledgeChunkORM.content.ilike(f"%{skill_name}%")
-            )
+            .order_by(KnowledgeChunkORM.embedding.cosine_distance(embedding))
             .limit(max_chunks)
             .all()
         )
@@ -509,6 +545,59 @@ def summarize_conversation_memory(topic: str, conversation_text: str) -> str:
         "This memory includes recent discussion points, unresolved questions, "
         "and suggested follow-up actions for this topic."
     )
+
+
+def synthesize_and_embed_student_profile(db, user_id: str, raw_profile_text: str) -> None:
+    client = _get_openai_client()
+    if not client: return
+    try:
+        response = client.chat.completions.create(
+            model=_iter_model_candidates()[0],
+            messages=[
+                {"role": "system", "content": "You are an expert tutor. Summarize the student's profile into a single coherent paragraph, focusing on learning style, background, and any struggles (like anxiety)."},
+                {"role": "user", "content": f"Raw onboarding data:\n{raw_profile_text}"}
+            ]
+        )
+        summary = _extract_reply_text_from_openai(response)
+        if not summary: return
+
+        embedding = generate_embedding(summary)
+        from db import StudentModelEmbeddingORM
+        record = db.query(StudentModelEmbeddingORM).filter_by(user_id=user_id).first()
+        if not record:
+            record = StudentModelEmbeddingORM(user_id=user_id, summary_text=summary, embedding=embedding)
+            db.add(record)
+        else:
+            record.summary_text = summary
+            record.embedding = embedding
+        db.commit()
+    except Exception as exc:
+        logger.error("Synthesis failed: %s", exc)
+        db.rollback()
+
+
+def summarize_and_embed_episodic_memory(db, user_id: str, conversation_text: str) -> None:
+    client = _get_openai_client()
+    if not client: return
+    try:
+        response = client.chat.completions.create(
+            model=_iter_model_candidates()[0],
+            messages=[
+                {"role": "system", "content": "Summarize this tutoring session in one paragraph. Focus on what was taught, what analogies were used, and the student's level of understanding."},
+                {"role": "user", "content": conversation_text}
+            ]
+        )
+        summary = _extract_reply_text_from_openai(response)
+        if not summary: return
+
+        embedding = generate_embedding(summary)
+        from db import EpisodicMemoryORM
+        record = EpisodicMemoryORM(user_id=user_id, summary_text=summary, embedding=embedding)
+        db.add(record)
+        db.commit()
+    except Exception as exc:
+        logger.error("Episodic memory synthesis failed: %s", exc)
+        db.rollback()
 
 
 def extract_profile_updates(conversation_text: str) -> dict:
