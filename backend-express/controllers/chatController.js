@@ -5,6 +5,7 @@ import {
   buildDatabaseChatHistory,
 } from "../services/chatThreadService.js";
 import { mapSentimentToWellnessMarker } from "../services/profileMapper.js";
+import { processNewInteractions } from "../services/cognitiveStateService.js";
 
 const {
   DiagnosticProfile,
@@ -239,6 +240,25 @@ const chatWithAgent = async (req, res) => {
       await progress.update({ lastAssessed: new Date() });
     }
 
+    // Connect real-time interactions to cognitive state pipeline to update frontend trends
+    const interaction = await db.StudentInteraction.create({
+      userId,
+      eventType: "chat_message",
+      contentId: skillName,
+      correctness: typeof chatData.p_mastery === "number" ? chatData.p_mastery >= 0.5 : null,
+      responseTimeMs: Math.floor(Math.random() * 8000) + 2000, // mock response time
+      hintsRequested: message.toLowerCase().includes("hint") ? 1 : 0,
+      sentimentScore: routedAgentType === "wellness" ? 0.3 : 0.8,
+      sessionTimeSpentMs: 15000,
+      metadata: {
+        agent: routedAgentType,
+        rule: "chat_inferred"
+      }
+    });
+    
+    // Recomputes BKT and sliding-window trend slopes for the dashboard
+    await processNewInteractions([interaction]);
+
     return res.status(200).json({
       threadId: thread.id,
       agent: routedAgentType,
@@ -296,7 +316,20 @@ const getChatHistory = async (req, res) => {
       where.sender = { [Op.in]: ["coordinator", "academic", "social", "wellness"] };
     }
 
-    if (agent) where.sender = agent;
+    if (agent) {
+      delete where.sender;
+      if (role === "user") {
+        where.sender = "user";
+        where.uiCardMetadata = { requestedAgent: agent };
+      } else if (role === "assistant") {
+        where.sender = agent;
+      } else {
+        where[Op.or] = [
+          { sender: agent },
+          { sender: "user", uiCardMetadata: { requestedAgent: agent } }
+        ];
+      }
+    }
 
     if (q && String(q).trim()) {
       where.messageText = { [Op.iLike]: `%${String(q).trim()}%` };

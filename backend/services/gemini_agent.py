@@ -1,16 +1,6 @@
 """backend/services/gemini_agent.py
 
-NOTE: Despite the filename, this module now uses GitHub Models via an
-OpenAI-compatible endpoint.
-
-Why keep the filename?
-- The FastAPI router imports `call_gemini()` and `summarize_conversation_memory()`.
-    We keep those function names stable to avoid breaking the orchestration layer.
-
-Configuration (env):
-- `GITHIB_API_URl` (required by project request; defaulted if missing)
-- `GITHUB_TOKEN` or `GITHUB_PAT` (GitHub Personal Access Token)
-- `GITHUB_MODEL` (chat model id; defaults to a reasonable ChatGPT-class model)
+This module uses Google Gemini models.
 """
 
 from __future__ import annotations
@@ -24,35 +14,19 @@ from typing import Optional, List
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GitHub Models (OpenAI-compatible) client — lazy init
+# Gemini client — lazy init
 # ─────────────────────────────────────────────────────────────────────────────
 
-_openai_client = None
-_GITHUB_MODELS_BASE_URL_DEFAULT = "https://models.inference.ai.azure.com"
-
-
-def _get_github_models_base_url() -> str:
-    # The user requested this exact env var name (typo preserved).
-    return (os.getenv("GITHIB_API_URl") or _GITHUB_MODELS_BASE_URL_DEFAULT).strip()
-
-
-def _get_github_pat() -> str:
-    return (
-        os.getenv("GITHUB_TOKEN")
-        or os.getenv("GITHUB_PAT")
-        or os.getenv("GITHUB_API_KEY")
-        or os.getenv("OPENAI_API_KEY")
-        or ""
-    ).strip()
-
+_gemini_client = None
 
 def _iter_model_candidates() -> List[str]:
     # Keep order, drop empties, and dedupe.
     candidates = [
-        os.getenv("GITHUB_MODEL", "").strip(),
-        # Sensible defaults (availability depends on your GitHub Models org allowlist)
-        "gpt-4o-mini",
-        "gpt-4.1-mini",
+        os.getenv("GEMINI_MODEL", "").strip(),
+        # Sensible defaults
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
     ]
     seen = set()
     ordered: List[str] = []
@@ -64,36 +38,29 @@ def _iter_model_candidates() -> List[str]:
     return ordered
 
 
-def _get_openai_client():
-    global _openai_client
-    if _openai_client is not None:
-        return _openai_client
+def _get_gemini_client():
+    global _gemini_client
+    if _gemini_client is not None:
+        return _gemini_client
 
-    api_key = _get_github_pat()
-    base_url = _get_github_models_base_url()
-
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         logger.warning(
-            "GitHub PAT not set (expected env GITHUB_TOKEN or GITHUB_PAT) — using fallback responses."
+            "GEMINI_API_KEY not set — using fallback responses."
         )
         return None
 
     try:
-        from openai import OpenAI
-
-        _openai_client = OpenAI(
-            api_key=api_key,
-            base_url=base_url,
-        )
-        logger.info("GitHub Models client initialized (base_url=%s).", base_url)
-        return _openai_client
+        from google import genai
+        _gemini_client = genai.Client(api_key=api_key)
+        logger.info("Gemini client initialized.")
+        return _gemini_client
     except Exception as exc:
-        logger.error("Failed to initialize OpenAI-compatible client: %s", exc)
+        logger.error("Failed to initialize Gemini client: %s", exc)
         return None
 
-
 # ─────────────────────────────────────────────────────────────────────────────
-# Token counter (approximate)
+# Token counter (approximate) & Embeddings
 # ─────────────────────────────────────────────────────────────────────────────
 
 def generate_embedding(text: str) -> list[float]:
@@ -103,7 +70,6 @@ def generate_embedding(text: str) -> list[float]:
     if not text.strip():
         return [0.0] * 1536
     try:
-        import os
         from google import genai
         
         gemini_key = os.getenv("GEMINI_API_KEY")
@@ -112,7 +78,7 @@ def generate_embedding(text: str) -> list[float]:
             return [0.0] * 1536
             
         client = genai.Client(api_key=gemini_key)
-        embedding_model = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+        embedding_model = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
             
         response = client.models.embed_content(
             model=embedding_model,
@@ -135,57 +101,62 @@ def generate_embedding(text: str) -> list[float]:
         return [0.0] * 1536
 
 
-def _count_tokens_approx(text: str) -> int:
+def _count_tokens(text: str) -> int:
     """
-    Approximate token count — splits on whitespace + punctuation.
-    Fast heuristic: 1 token ≈ 0.75 words in English.
-    Used to enforce the ≤150 token system instruction limit.
+    Counts tokens accurately using the official Gemini SDK method.
+    Falls back to a fast heuristic if the client is unavailable.
     """
-    words = text.split()
-    return max(1, int(len(words) / 0.75))
+    client = _get_gemini_client()
+    if not client:
+        return max(1, int(len(text.split()) / 0.75))
+    try:
+        response = client.models.count_tokens(
+            model=_iter_model_candidates()[0],
+            contents=text
+        )
+        return response.total_tokens
+    except Exception:
+        return max(1, int(len(text.split()) / 0.75))
 
 
 def _truncate_to_token_limit(text: str, max_tokens: int = 150) -> str:
     """
-    Truncates the system instruction to stay within max_tokens.
-    Preserves whole sentences where possible.
+    Truncates the system instruction to stay within max_tokens using accurate token counting.
+    Uses binary search for efficiency instead of word-by-word API calls.
     """
-    if _count_tokens_approx(text) <= max_tokens:
+    if _count_tokens(text) <= max_tokens:
         return text
 
-    # Truncate word-by-word until within budget
     words = text.split()
-    result_words = []
-    estimated_tokens = 0
-    for word in words:
-        word_tokens = max(1, int(1 / 0.75))
-        if estimated_tokens + word_tokens > max_tokens:
-            break
-        result_words.append(word)
-        estimated_tokens += word_tokens
+    left, right = 0, len(words)
+    best_text = ""
+    
+    while left <= right:
+        mid = (left + right) // 2
+        candidate = " ".join(words[:mid])
+        if _count_tokens(candidate) <= max_tokens:
+            best_text = candidate
+            left = mid + 1
+        else:
+            right = mid - 1
 
-    truncated = " ".join(result_words)
-    logger.debug("System instruction truncated to ~%d tokens.", estimated_tokens)
-    return truncated
+    logger.debug("System instruction truncated.")
+    return best_text
 
 
-def _extract_reply_text_from_openai(response) -> str:
+def _extract_reply_text(response) -> str:
     try:
-        choice = (getattr(response, "choices", None) or [None])[0]
-        if not choice:
-            return ""
-        message = getattr(choice, "message", None)
-        content = getattr(message, "content", None)
-        return (content or "").strip()
+        return (response.text or "").strip()
     except Exception:
         return ""
 
 
-def _response_hit_token_limit_openai(response) -> bool:
+def _response_hit_token_limit(response) -> bool:
     try:
-        choice = (getattr(response, "choices", None) or [None])[0]
-        finish_reason = getattr(choice, "finish_reason", None)
-        return str(finish_reason).lower() in {"length", "max_tokens"}
+        # Check finish_reason
+        if getattr(response.candidates[0], 'finish_reason', None) == 'MAX_TOKENS':
+            return True
+        return False
     except Exception:
         return False
 
@@ -204,7 +175,7 @@ def _looks_incomplete(text: str) -> bool:
         return True
 
     # Check for terminal punctuation
-    if not re.search(r"[.!?]['\")\]]*$", stripped):
+    if not re.search(r"[.!?]['\"\)]*$", stripped):
         return True
 
     return False
@@ -221,7 +192,7 @@ def _normalize_history_entries(entries, source: str) -> List[dict]:
         content = str(item.get("content", "")).strip()
         if not content:
             continue
-        role = "assistant" if str(item.get("role", "")).lower() == "assistant" else "user"
+        role = "model" if str(item.get("role", "")).lower() in ("assistant", "model") else "user"
         normalized.append({"role": role, "content": content, "source": source})
     return normalized
 
@@ -241,7 +212,7 @@ def _build_context_window(
     window = merged[-max_turns:]
     lines = []
     for item in window:
-        speaker = "Assistant" if item["role"] == "assistant" else "Student"
+        speaker = "Assistant" if item["role"] == "model" else "Student"
         source_label = "DB" if item["source"] == "database" else "Session"
         lines.append(f"[{source_label}] {speaker}: {item['content']}")
     return "\n".join(lines)
@@ -270,20 +241,18 @@ def _summarize_history_with_ai(
     )
 
     try:
-        response = client.chat.completions.create(
+        from google.genai import types
+        response = client.models.generate_content(
             model=model_name,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You summarize tutoring conversations for context carryover.",
-                },
-                {"role": "user", "content": summary_prompt},
-            ],
-            temperature=0.2,
-            max_tokens=260,
-            top_p=0.9,
+            contents=summary_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction="You summarize tutoring conversations for context carryover.",
+                temperature=0.2,
+                max_output_tokens=260,
+                top_p=0.9,
+            )
         )
-        return _extract_reply_text_from_openai(response)
+        return _extract_reply_text(response)
     except Exception as exc:
         logger.warning("History summarization failed (non-fatal): %s", exc)
         return ""
@@ -302,13 +271,6 @@ def _fetch_pgvector_context(
     """
     Task 4: Retrieves the top-2 most semantically similar knowledge chunks
     from the `knowledge_chunks` table for a struggling student.
-
-    Only called when needs_pgvector=True (p_mastery < 0.4 AND practice < 3).
-    Returns a scaffolding snippet to append to the system instruction.
-
-    Note: Embedding the user_message requires an embedding model.
-    Here we use a keyword-match fallback if no embedding is available,
-    keeping the function non-breaking.
     """
     try:
         from db import KnowledgeChunkORM
@@ -350,32 +312,15 @@ def call_gemini(
     user_id: str | None = None,
 ) -> str:
     """
-    Task 4 — Token Optimization Protocol.
-
     Constructs the Gemini prompt as:
       [system_instruction (≤150 tokens)] + [optional pgvector scaffolding] + [user_message]
-
-    NO chat history is passed. This is intentional — the system instruction
-    encodes all necessary context from the database (BKT, profile, mood).
-
-    Args:
-        system_instruction: Rendered system prompt from state_engine.py.
-        user_message:       The student's current question.
-        needs_pgvector:     If True, appends semantic knowledge scaffolding.
-        skill_name:         Used for pgvector lookup.
-        db:                 SQLAlchemy session (required if needs_pgvector=True).
-
-    Returns:
-        The Gemini response string, or a graceful fallback.
     """
-    client = _get_openai_client()
+    client = _get_gemini_client()
 
-    # ── Enforce ≤150 token system instruction ─────────────────────────────
     optimized_instruction = _truncate_to_token_limit(system_instruction, max_tokens=150)
-    token_count = _count_tokens_approx(optimized_instruction)
+    token_count = _count_tokens(optimized_instruction)
     logger.info("System instruction: ~%d tokens (limit: 150).", token_count)
 
-    # ── pgvector scaffolding (only when struggling AND low practice) ──────
     scaffolding = ""
     if needs_pgvector and db is not None and skill_name:
         scaffolding_text = _fetch_pgvector_context(db, skill_name, user_message)
@@ -384,14 +329,10 @@ def call_gemini(
 
     context_window = _build_context_window(chat_history, database_chat_history)
 
-    logger.debug(
-        "Gemini prompt:\n--- SYSTEM ---\n%s\n--- USER ---\n%s",
-        optimized_instruction,
-        user_message,
-    )
-
     if client is None:
         return _fallback_response(user_message, needs_pgvector)
+
+    from google.genai import types
 
     try:
         for model_name in _iter_model_candidates():
@@ -412,39 +353,32 @@ def call_gemini(
                 system_content = f"{optimized_instruction}{scaffolding}{context_block}".strip()
                 user_content = f"Current Student Message: {user_message}".strip()
 
-                response = client.chat.completions.create(
+                response = client.models.generate_content(
                     model=model_name,
-                    messages=[
-                        {"role": "system", "content": system_content},
-                        {"role": "user", "content": user_content},
-                    ],
-                    temperature=0.7,
-                    max_tokens=1200,
-                    top_p=0.95,
+                    contents=user_content,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_content,
+                        temperature=0.7,
+                        max_output_tokens=1200,
+                        top_p=0.95,
+                    )
                 )
 
-                reply = _extract_reply_text_from_openai(response)
+                reply = _extract_reply_text(response)
 
-                if reply and _response_hit_token_limit_openai(response):
+                if reply and _response_hit_token_limit(response):
                     try:
-                        continuation = client.chat.completions.create(
+                        continuation = client.models.generate_content(
                             model=model_name,
-                            messages=[
-                                {"role": "system", "content": system_content},
-                                {"role": "user", "content": user_content},
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        "Continue from the exact last sentence without repeating earlier text. "
-                                        "Finish the answer completely."
-                                    ),
-                                },
-                            ],
-                            temperature=0.7,
-                            max_tokens=1200,
-                            top_p=0.95,
+                            contents=f"Previous part of response: {reply}\n\nContinue from the exact last sentence without repeating earlier text. Finish the answer completely.",
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_content,
+                                temperature=0.7,
+                                max_output_tokens=1200,
+                                top_p=0.95,
+                            )
                         )
-                        continuation_text = _extract_reply_text_from_openai(continuation)
+                        continuation_text = _extract_reply_text(continuation)
                         if continuation_text:
                             reply = f"{reply}\n\n{continuation_text}".strip()
                     except Exception as continuation_exc:
@@ -452,7 +386,6 @@ def call_gemini(
 
                 if reply and not _looks_incomplete(reply):
                     final_reply = reply
-                    # After producing a reply, attempt to extract structured profile updates
                     try:
                         conv_text = "\n\n".join(filter(None, [context_window, user_message, final_reply]))
                         updates = extract_profile_updates(conv_text)
@@ -469,12 +402,12 @@ def call_gemini(
                     return reply
 
             except Exception as model_exc:
-                logger.warning("GitHub model '%s' failed: %s", model_name, model_exc)
+                logger.warning("Gemini model '%s' failed: %s", model_name, model_exc)
 
         return _fallback_response(user_message, needs_pgvector)
 
     except Exception as e:
-        logger.error("GitHub Models API error: %s", e)
+        logger.error("Gemini API error: %s", e)
         return _fallback_response(user_message, needs_pgvector)
 
 
@@ -499,7 +432,7 @@ def summarize_conversation_memory(topic: str, conversation_text: str) -> str:
     if not conversation_text.strip():
         return "No conversation context available yet for this topic."
 
-    client = _get_openai_client()
+    client = _get_gemini_client()
     if client is None:
         return (
             "This memory contains prior discussion context for this topic, "
@@ -515,27 +448,20 @@ def summarize_conversation_memory(topic: str, conversation_text: str) -> str:
         f"Conversation snippets:\n{conversation_text}"
     )
 
+    from google.genai import types
     for model_name in _iter_model_candidates():
         try:
-            response = client.chat.completions.create(
+            response = client.models.generate_content(
                 model=model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are generating a memory card summary for a tutoring app. "
-                            "Write one concise paragraph (3-5 sentences) that captures: "
-                            "what the student discussed, key confusion points, and the next best step. "
-                            "Keep it practical, warm, and easy to scan."
-                        ),
-                    },
-                    {"role": "user", "content": summary_prompt},
-                ],
-                temperature=0.35,
-                max_tokens=280,
-                top_p=0.9,
+                contents=summary_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction="You are generating a memory card summary for a tutoring app.",
+                    temperature=0.35,
+                    max_output_tokens=280,
+                    top_p=0.9,
+                )
             )
-            reply = _extract_reply_text_from_openai(response)
+            reply = _extract_reply_text(response)
             if reply:
                 return reply
         except Exception as exc:
@@ -548,17 +474,18 @@ def summarize_conversation_memory(topic: str, conversation_text: str) -> str:
 
 
 def synthesize_and_embed_student_profile(db, user_id: str, raw_profile_text: str) -> None:
-    client = _get_openai_client()
+    client = _get_gemini_client()
     if not client: return
     try:
-        response = client.chat.completions.create(
+        from google.genai import types
+        response = client.models.generate_content(
             model=_iter_model_candidates()[0],
-            messages=[
-                {"role": "system", "content": "You are an expert tutor. Summarize the student's profile into a single coherent paragraph, focusing on learning style, background, and any struggles (like anxiety)."},
-                {"role": "user", "content": f"Raw onboarding data:\n{raw_profile_text}"}
-            ]
+            contents=f"Raw onboarding data:\n{raw_profile_text}",
+            config=types.GenerateContentConfig(
+                system_instruction="You are an expert tutor. Summarize the student's profile into a single coherent paragraph, focusing on learning style, background, and any struggles (like anxiety).",
+            )
         )
-        summary = _extract_reply_text_from_openai(response)
+        summary = _extract_reply_text(response)
         if not summary: return
 
         embedding = generate_embedding(summary)
@@ -577,17 +504,18 @@ def synthesize_and_embed_student_profile(db, user_id: str, raw_profile_text: str
 
 
 def summarize_and_embed_episodic_memory(db, user_id: str, conversation_text: str) -> None:
-    client = _get_openai_client()
+    client = _get_gemini_client()
     if not client: return
     try:
-        response = client.chat.completions.create(
+        from google.genai import types
+        response = client.models.generate_content(
             model=_iter_model_candidates()[0],
-            messages=[
-                {"role": "system", "content": "Summarize this tutoring session in one paragraph. Focus on what was taught, what analogies were used, and the student's level of understanding."},
-                {"role": "user", "content": conversation_text}
-            ]
+            contents=conversation_text,
+            config=types.GenerateContentConfig(
+                system_instruction="Summarize this tutoring session in one paragraph. Focus on what was taught, what analogies were used, and the student's level of understanding.",
+            )
         )
-        summary = _extract_reply_text_from_openai(response)
+        summary = _extract_reply_text(response)
         if not summary: return
 
         embedding = generate_embedding(summary)
@@ -603,12 +531,6 @@ def summarize_and_embed_episodic_memory(db, user_id: str, conversation_text: str
 def extract_profile_updates(conversation_text: str) -> dict:
     """
     Extracts profile update signals from a conversation.
-
-    Returns a dict with:
-      learning_barriers_score: float [0.0, 1.0]
-      wellness_support_needed: bool
-      social_support_needed: bool
-      notes: str
     """
     if not conversation_text.strip():
         return {
@@ -618,7 +540,7 @@ def extract_profile_updates(conversation_text: str) -> dict:
             "notes": "empty conversation",
         }
 
-    client = _get_openai_client()
+    client = _get_gemini_client()
     if client is None:
         return {
             "learning_barriers_score": None,
@@ -640,19 +562,21 @@ def extract_profile_updates(conversation_text: str) -> dict:
         "Output JSON only."
     )
 
+    from google.genai import types
     for model_name in _iter_model_candidates():
         try:
-            response = client.chat.completions.create(
+            response = client.models.generate_content(
                 model=model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.1,
-                max_tokens=220,
-                top_p=0.9,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.1,
+                    max_output_tokens=220,
+                    top_p=0.9,
+                    response_mime_type="application/json",
+                )
             )
-            reply = _extract_reply_text_from_openai(response)
+            reply = _extract_reply_text(response)
             parsed = _safe_parse_json(reply)
             if parsed:
                 return parsed
@@ -670,8 +594,6 @@ def extract_profile_updates(conversation_text: str) -> dict:
 def update_student_parameters(db, user_id: str, updates: dict) -> dict:
     """
     Apply structured profile updates to the InitialProfileORM for a user.
-    Expected keys in `updates`: learning_barriers_score (0.0-1.0), wellness_support_needed (bool), social_support_needed (bool)
-    Returns the applied values for confirmation.
     """
     try:
         from db import InitialProfileORM
@@ -690,13 +612,15 @@ def update_student_parameters(db, user_id: str, updates: dict) -> dict:
         if isinstance(wellness, bool):
             profile.wellness_support_needed = wellness
             applied["wellness_support_needed"] = wellness
+            if wellness is True:
+                profile.requires_human_override = True
+                applied["requires_human_override"] = True
 
         social = updates.get("social_support_needed")
         if isinstance(social, bool):
             profile.social_support_needed = social
             applied["social_support_needed"] = social
 
-        # Optionally update cognitive_rules payload
         notes = updates.get("notes")
         if notes and isinstance(notes, str):
             existing = profile.cognitive_rules or {}

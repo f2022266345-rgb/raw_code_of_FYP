@@ -77,10 +77,11 @@ async function startServer() {
     console.log("\nInitializing Lumina Express Backend v3.0...");
 
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true });
+    // Migrations should be handled via the migration scripts in production
+    // await sequelize.sync({ alter: true });
 
     console.log("Database: PostgreSQL connection established.");
-    console.log("Database: Lumina core schema synced (alter mode).");
+    console.log("Database: Automatic schema syncing disabled. Run migrations manually.");
 
     const server = app.listen(PORT, () => {
       console.log(`

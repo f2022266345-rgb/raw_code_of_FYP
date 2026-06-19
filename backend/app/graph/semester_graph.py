@@ -4,7 +4,7 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from db import SessionLocal, BktSkillMasteryORM, InteractionLogORM, InitialProfileORM, ProgressSnapshotORM
-from services.gemini_agent import _get_openai_client, _iter_model_candidates
+from services.gemini_agent import _get_gemini_client, _iter_model_candidates
 from datetime import datetime, timedelta, timezone
 
 class SemesterState(TypedDict):
@@ -53,7 +53,7 @@ async def ingestion_node(state: SemesterState) -> dict:
         db.close()
 
 async def analysis_node(state: SemesterState) -> dict:
-    client = _get_openai_client()
+    client = _get_gemini_client()
     data = state.get("data", {})
     
     prompt = f"""
@@ -73,12 +73,13 @@ async def analysis_node(state: SemesterState) -> dict:
         return {"analysis": "Service unavailable", "is_critical": False}
         
     try:
-        response = client.chat.completions.create(
+        from google.genai import types
+        response = client.models.generate_content(
             model=_iter_model_candidates()[0],
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json")
         )
-        result_text = response.choices[0].message.content
+        result_text = response.text
         result = json.loads(result_text)
         
         return {

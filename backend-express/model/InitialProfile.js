@@ -112,6 +112,12 @@ const InitialProfile = sequelize.define(
       defaultValue: ["academic"],
       field: "active_agents",
     },
+    requiresHumanOverride: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: "requires_human_override",
+    },
   },
   {
     tableName: "initial_profiles",

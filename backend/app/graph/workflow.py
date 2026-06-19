@@ -1,75 +1,46 @@
 from langgraph.graph import StateGraph, START, END
 from app.graph.state import GraphState
 from app.graph.nodes.gateway import gateway_node
-from app.graph.nodes.coordinator import coordinator_node
-from app.graph.nodes.academic import academic_node
-from app.graph.nodes.social import social_node
-from app.graph.nodes.wellness import wellness_node
-from app.graph.nodes.critic import critic_node
+from app.graph.nodes.plan_nodes import (
+    generate_academic_plan,
+    generate_social_plan,
+    generate_wellness_plan,
+    synthesize_plan_node,
+    human_support_node
+)
 
-def route_from_coordinator(state: GraphState) -> str:
-    agent = state.get("active_agent", "academic")
-    if agent == "wellness":
-        return "wellness"
-    elif agent == "social":
-        return "social"
-    return "academic"
-
-def route_from_wellness(state: GraphState) -> str:
-    if state.get("risk_level") == "Critical":
-        return "escalation"
-    return "critic"
-
-def route_from_critic(state: GraphState) -> str:
-    return END
-
-async def escalation_node(state: GraphState) -> dict:
-    from langchain_core.messages import AIMessage
-    return {"messages": [AIMessage(content="ESCALATION: Human support has been notified.")]}
+def route_from_gateway(state: GraphState) -> list:
+    profile = state.get("student_profile", {})
+    if profile.get("requires_human_override", False):
+        return ["human_support"]
+    return ["academic_plan", "social_plan", "wellness_plan"]
 
 builder = StateGraph(GraphState)
 
+# 1. Add nodes
 builder.add_node("gateway", gateway_node)
-builder.add_node("coordinator", coordinator_node)
-builder.add_node("academic", academic_node)
-builder.add_node("social", social_node)
-builder.add_node("wellness", wellness_node)
-builder.add_node("critic", critic_node)
-builder.add_node("escalation", escalation_node)
+builder.add_node("academic_plan", generate_academic_plan)
+builder.add_node("social_plan", generate_social_plan)
+builder.add_node("wellness_plan", generate_wellness_plan)
+builder.add_node("synthesize", synthesize_plan_node)
+builder.add_node("human_support", human_support_node)
 
+# 2. Add edges
 builder.add_edge(START, "gateway")
-builder.add_edge("gateway", "coordinator")
 
+# Fan-out / Circuit Breaker
 builder.add_conditional_edges(
-    "coordinator",
-    route_from_coordinator,
-    {
-        "academic": "academic",
-        "social": "social",
-        "wellness": "wellness"
-    }
+    "gateway",
+    route_from_gateway,
+    ["academic_plan", "social_plan", "wellness_plan", "human_support"]
 )
 
-builder.add_edge("academic", "critic")
-builder.add_edge("social", "critic")
+# Fan-in
+builder.add_edge("academic_plan", "synthesize")
+builder.add_edge("social_plan", "synthesize")
+builder.add_edge("wellness_plan", "synthesize")
 
-builder.add_conditional_edges(
-    "wellness",
-    route_from_wellness,
-    {
-        "critic": "critic",
-        "escalation": "escalation"
-    }
-)
+builder.add_edge("synthesize", END)
+builder.add_edge("human_support", END)
 
-builder.add_edge("escalation", END)
-builder.add_conditional_edges(
-    "critic",
-    route_from_critic,
-    {
-        END: END,
-        "academic": "academic",
-        "social": "social",
-        "wellness": "wellness"
-    }
-)
+workflow = builder.compile()

@@ -7,6 +7,8 @@ const router = Router();
 router.get("/stats", counselorController.getDashboardStats);
 
 // Case management
+router.get("/overrides", counselorController.getOverrides);
+router.post("/resolve-override/:userId", counselorController.resolveOverride);
 router.get("/cases", counselorController.listCases);
 router.post("/cases", counselorController.createCase);
 router.get("/cases/:caseId", counselorController.getCase);

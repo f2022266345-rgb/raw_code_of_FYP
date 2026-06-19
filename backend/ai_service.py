@@ -217,4 +217,5 @@ def predict_initial_profile(data_dict: dict) -> dict:
         "social_support_needed": social_support_needed,
         "academic_support_needed": academic_support_needed,
         "active_agents": active_agents,
+        "requires_human_override": wellness_support_needed,
     }

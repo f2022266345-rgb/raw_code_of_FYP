@@ -11,6 +11,7 @@ import CounselorCase from "./CounselorCase.js";
 import BktSkillMastery from "./BktSkillMastery.js";
 import StudentProfileState from "./StudentProfileState.js";
 import InteractionLog from "./InteractionLog.js";
+import StudentInteraction from "./StudentInteraction.js";
 
 const db = {
   User,
@@ -25,6 +26,7 @@ const db = {
   BktSkillMastery,
   StudentProfileState,
   InteractionLog,
+  StudentInteraction,
   sequelize,
 };
 

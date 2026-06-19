@@ -19,11 +19,11 @@
 
 1. Frontend sends chat message to Express: POST /api/chat
 2. Frontend includes current in-memory chat window (recent turns) in the same request.
-3. Express authenticates user, fetches recent persisted chat turns from InteractionLog, and forwards both windows to FastAPI: POST /api/agent/chat
-4. FastAPI retrieves student context from DB mirrors, optionally performs lightweight routing when agent_type is coordinator/auto, applies agent-specific guardrails, builds the state/persona prompt package, builds a context window (session + DB), generates an AI summary of chat history for continuity, and then calls Gemini with prompt + context window + summary.
+3. Express authenticates user via Clerk, fetches recent persisted chat turns, and forwards both windows to FastAPI: POST /api/agent/chat
+4. FastAPI retrieves a comprehensive 6-table student context (BKT mastery, InitialProfile, InteractionLog, AgentMemory, StudentModelEmbedding, EpisodicMemory). It optionally performs lightweight routing when agent_type is coordinator/auto, applies agent-specific guardrails, builds the state/persona prompt package, builds a context window (session + DB), generates an AI summary of chat history for continuity, and then calls Gemini with prompt + context window + summary.
 5. FastAPI returns response + metadata (state, persona, p_mastery, routed_agent).
 6. Express logs user/assistant events and returns final response to frontend.
-7. FastAPI runs a background extraction step to update InitialProfile (learning_barriers_score, wellness_support_needed, social_support_needed) based on the latest conversation summary.
+7. FastAPI runs a background extraction step to update InitialProfile (learning_barriers_score, wellness_support_needed, social_support_needed) and synthesize EpisodicMemory based on the latest conversation summary.
 
 ## 3.1) Current Runtime Flow (Onboarding)
 
@@ -94,10 +94,8 @@ Why this matters:
   - JWT_SECRET=...
 - FastAPI .env (backend-fastapi/.env):
   - DATABASE_URL=postgresql+psycopg://... (or normalized equivalent)
-  - GITHIB_API_URl=https://models.inference.ai.azure.com (GitHub Models base URL; typo preserved per project)
-  - GITHUB_TOKEN=... (GitHub Personal Access Token used as API key)
-  - GITHUB_MODEL=gpt-4o-mini (or another available GitHub Models chat model)
-  - (optional legacy) GEMINI_API_KEY=... / GEMINI_MODEL=... if you keep Gemini around
+  - GEMINI_API_KEY=... (Your Google Gemini API Key)
+  - GEMINI_MODEL=gemini-2.5-flash (or another Gemini model, e.g., gemini-1.5-flash)
 
 Rule: Frontend should call only Express base URL. Express talks to FastAPI via FASTAPI_BASE_URL.
 
@@ -142,16 +140,20 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
   - pgvector-first semantic memory flow hardening
   - full production-grade endpoint integration and deployment readiness
   - post-chat profile update tuning (LLM extraction prompts)
+  - LangGraph workflows for multi-agent streaming and semester analysis (currently experimental)
 
 ## 8) Known Risks / Notes
 
-- ✅ **FIXED: Gemini Import Error** - Previous code used `from google import genai` which caused "cannot import name 'genai'" error. Corrected to `import google.generativeai as genai` with proper API initialization via `genai.configure(api_key=...)` and `genai.GenerativeModel()`. Real Gemini responses now flow through the pipeline.
+- ✅ **FIXED: Migration to Google Gemini** - Migrated away from GitHub Models to the new Google Gemini SDK (`google-genai`). We use `from google import genai` with `genai.Client(api_key=...)`.
 - ✅ **FIXED: Port Conflict** - FastAPI now runs on port 8080 (port 8000 was occupied). Updated Express FASTAPI_BASE_URL to <http://localhost:8080>.
 - ✅ **FIXED: Truncated/Short Agent Replies** - FastAPI Gemini orchestration now prefers complete responses by default, increased response token budget, and performs a continuation call when generation stops at token limit. This prevents cut-off replies such as partial last sentences.
 - Legacy FastAPI file backend/services/chat_service.py still references OpenAI; active agent-chat flow uses gemini_agent.py through /api/agent/chat.
 - FastAPI DB init expects vector extension in local PostgreSQL.
 - If vector extension is unavailable locally, vector-dependent features may degrade or fail.
 - Initial profiling artifacts (`student_model.pkl`, `encoders.pkl`) were trained on older scikit-learn; runtime suppresses `InconsistentVersionWarning` for stability until artifacts are retrained on the current sklearn version.
+- ⚠️ **Dual LLM Path Crash**: LangGraph nodes (`app/graph/nodes/*.py` and `semester_graph.py`) reference `_get_openai_client()` which was removed in the Gemini migration. These nodes will crash at runtime.
+- ⚠️ **DB Sync Risk**: Express `server.js` uses `sequelize.sync({ alter: true })` which can modify/drop columns dynamically and cause data loss in production.
+- ⚠️ **Context Truncation Bug**: `_truncate_to_token_limit` in `gemini_agent.py` contains a bug that effectively treats word count as token count.
 
 ## 9) Local Run Order
 

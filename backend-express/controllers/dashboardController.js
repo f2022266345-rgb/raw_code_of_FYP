@@ -12,7 +12,7 @@ const {
   InitialProfile,
   BktSkillMastery,
   StudentProfileState,
-  InteractionLog,
+  StudentInteraction,
 } = db;
 
 const getMyDashboard = async (req, res) => {
@@ -57,9 +57,9 @@ const getMyDashboard = async (req, res) => {
       where: { userId },
       order: [["createdAt", "DESC"]]
     });
-    const recentInteractions = await InteractionLog.findAll({
+    const recentInteractions = await StudentInteraction.findAll({
       where: { userId },
-      order: [["createdAt", "DESC"]],
+      order: [["occurredAt", "DESC"]],
       limit: 10
     });
 
@@ -126,6 +126,8 @@ const getMyDashboard = async (req, res) => {
       })),
       chatHistorySummary: {
         totalMessages: recentMessages.length,
+        userMessages: recentMessages.filter(m => m.sender === 'user').length,
+        assistantMessages: recentMessages.filter(m => m.sender !== 'user').length,
         lastMessageAt: latestChat?.createdAt || null,
         lastMessage: latestChat?.messageText || null,
         lastAgent: latestChat?.sender || null,
@@ -134,17 +136,17 @@ const getMyDashboard = async (req, res) => {
       
       // Data required for frontend dashboard features
       aiPrediction: initialProfile ? {
-        ai_prediction: {
-          status: "Active",
-          success_probability: 0.85
+        ai_prediction: initialProfile.aiPrediction?.ai_prediction || {
+          status: "Unknown",
+          success_probability: 0
         },
-        user_profile: {
-          major: user.major || "Computer Science",
-          university: user.university || "University",
+        user_profile: initialProfile.userProfile || {
+          major: user.major || "",
+          university: user.university || "",
         },
         bloomLevel: initialProfile.bloomLevel || 1,
         languageBarrierRisk: initialProfile.languageBarrierRisk || 0,
-        activeAgents: ["academic", "social", "wellness"]
+        activeAgents: initialProfile.activeAgents || ["academic"]
       } : null,
       
       bktSummary: {
@@ -169,30 +171,43 @@ const getMyDashboard = async (req, res) => {
         accuracyTrendSlope: 0,
         timeTrendSlope: 0,
         hintTrendSlope: 0,
-        frustrationEstimate: 0.1,
-        engagementEstimate: 0.9,
-        readinessEstimate: 0.8
+        frustrationEstimate: 0,
+        engagementEstimate: 0,
+        readinessEstimate: 0
       },
       
       coordinatorRoutingHistory: recentInteractions.map(log => ({
-        occurredAt: log.createdAt,
+        occurredAt: log.occurredAt,
         sourceEventType: log.eventType,
         routedAgent: log.metadata?.agent || "coordinator",
         matchedRule: log.metadata?.rule || "Default routing",
         rationale: log.metadata?.rationale || ""
       })),
       
+      observations: {
+        totalEvents: recentInteractions.length,
+        averageResponseTimeMs: recentInteractions.length > 0 
+          ? recentInteractions.reduce((acc, log) => acc + (log.responseTimeMs || 10000), 0) / recentInteractions.length 
+          : null
+      },
+      
       agentsStatus: {
         isAnalyzing: false,
-        academic: "active",
-        social: "active",
-        wellness: "idle"
+        academic: (initialProfile?.activeAgents || []).includes("academic") ? "active" : "idle",
+        social: (initialProfile?.activeAgents || []).includes("social") ? "active" : "idle",
+        wellness: (initialProfile?.activeAgents || []).includes("wellness") ? "active" : "idle"
       },
       
       agentResults: {
-        academic: "Study plan active. Focus on weak skills.",
-        social: "Connect with peers on Discord.",
-        wellness: "Stress levels are normal."
+        academic: bktSkills.length > 0 
+          ? `Tracking ${bktSkills.length} skills. Avg mastery: ${Math.round(bktSkills.reduce((acc, s) => acc + (s.pMastery || 0), 0) / bktSkills.length * 100)}%`
+          : "Ready to track your academic progress.",
+        social: socialMetrics 
+          ? `Communication score: ${socialMetrics.communicationScore}/100` 
+          : "Ready to support your social connections.",
+        wellness: latestWellness 
+          ? `Latest sentiment: ${latestWellness.sentimentMarker}` 
+          : "Monitoring your well-being."
       }
     });
   } catch (error) {

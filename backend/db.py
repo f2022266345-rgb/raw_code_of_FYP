@@ -197,6 +197,8 @@ class InitialProfileORM(Base):
     wellness_support_needed: Mapped[bool | None] = mapped_column("wellness_support_needed", Boolean, nullable=True, default=False)
     social_support_needed: Mapped[bool | None] = mapped_column("social_support_needed", Boolean, nullable=True, default=False)
     cognitive_rules: Mapped[dict | None] = mapped_column("cognitive_rules", JSON, nullable=True)
+    requires_human_override: Mapped[bool | None] = mapped_column("requires_human_override", Boolean, nullable=True, default=False)
+    last_assessment_date: Mapped[datetime | None] = mapped_column("last_assessment_date", DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column("createdAt", DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column("updatedAt", DateTime(timezone=True), nullable=True)
 

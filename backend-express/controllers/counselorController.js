@@ -20,6 +20,68 @@ const _postFastApiJson = async (path, payload) => {
   return response.json();
 };
 
+// ─── POST /api/counselor/resolve-override/:userId ────────────────────────────
+/**
+ * Allows a counselor to manually input adjusted parameters and clear the override flag.
+ */
+const resolveOverride = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { parameters } = req.body; // e.g., JSON string or object
+
+    const profile = await InitialProfile.findOne({ where: { userId } });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+    // Update parameters if provided (can be parsed to cognitiveRules or aiPrediction etc.)
+    if (parameters) {
+      profile.cognitiveRules = { ...profile.cognitiveRules, manualOverrides: parameters };
+    }
+    
+    // Clear the flag
+    profile.requiresHumanOverride = false;
+    await profile.save();
+
+    // Optionally forward to FastAPI
+    try {
+      await _postFastApiJson("/api/agent/counselor/apply-updates", {
+        user_id: userId,
+        updates: parameters || {},
+        counselor_notes: "Override resolved by counselor",
+      });
+    } catch (e) {
+      console.warn("FastAPI sync failed on resolveOverride:", e.message);
+    }
+
+    return res.status(200).json({ message: "Override resolved", profile });
+  } catch (error) {
+    console.error("resolveOverride error:", error);
+    return res.status(500).json({ message: "Failed to resolve override" });
+  }
+};
+
+// ─── GET /api/counselor/overrides ──────────────────────────────────────────────
+/**
+ * Returns all students who have the requires_human_override flag set.
+ */
+const getOverrides = async (req, res) => {
+  try {
+    const overrides = await InitialProfile.findAll({
+      where: { requiresHumanOverride: true },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email"],
+        },
+      ],
+    });
+    return res.status(200).json({ overrides });
+  } catch (error) {
+    console.error("getOverrides error:", error);
+    return res.status(500).json({ message: "Failed to fetch overrides" });
+  }
+};
+
 // ─── GET /api/counselor/cases ─────────────────────────────────────────────────
 /**
  * Returns all counselor cases, optionally filtered by status or severity.
@@ -226,4 +288,4 @@ const createCase = async (req, res) => {
   }
 };
 
-export default { listCases, getCase, updateCase, getDashboardStats, createCase };
+export default { listCases, getCase, updateCase, getDashboardStats, createCase, getOverrides, resolveOverride };

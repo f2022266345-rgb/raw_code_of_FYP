@@ -126,6 +126,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("init_db warning (non-fatal): %s", exc)
 
+    # Start APScheduler Background Loop
+    try:
+        from services.scheduler import start_scheduler
+        start_scheduler()
+    except Exception as exc:
+        logger.warning("Failed to start scheduler: %s", exc)
+
     yield
 
     skill_params.clear()
@@ -203,11 +210,13 @@ async def predict_initial_profile_endpoint(payload: InitialProfilingRequest, db:
         learner_id = payload.userId or str(uuid4())
         summary_text = json.dumps(prediction_result)
         
-        # Save to pgvector DB (using dummy 1536d vector for now)
+        # Save to pgvector DB (using actual Gemini embeddings)
+        from services.gemini_agent import generate_embedding
+        embedding = generate_embedding(summary_text)
         snapshot = StudentModelEmbeddingORM(
             user_id=learner_id,
             summary_text=summary_text,
-            embedding=[0.0] * 1536
+            embedding=embedding
         )
         db.add(snapshot)
         db.commit()

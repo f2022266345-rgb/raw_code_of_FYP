@@ -1,12 +1,12 @@
 from app.graph.state import GraphState
 from langchain_core.messages import AIMessage
-from services.gemini_agent import _get_openai_client, _iter_model_candidates
+from services.gemini_agent import _get_gemini_client, _iter_model_candidates
 from langgraph.store.base import BaseStore
 from langchain_core.runnables.config import RunnableConfig
 import uuid
 
 async def wellness_node(state: GraphState, config: RunnableConfig, store: BaseStore) -> dict:
-    client = _get_openai_client()
+    client = _get_gemini_client()
     user_msg = state["messages"][-1].content if state.get("messages") else ""
     user_id = state.get("user_id", "default")
     
@@ -33,15 +33,14 @@ Private Wellness Memory: {past_memories}"""
         return {"messages": [AIMessage(content="Wellness service unavailable.")]}
         
     try:
-        response = client.chat.completions.create(
+        from google.genai import types
+        response = client.models.generate_content(
             model=_iter_model_candidates()[0],
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": user_msg}
-            ]
+            contents=user_msg,
+            config=types.GenerateContentConfig(system_instruction=prompt)
         )
         return {
-            "messages": [AIMessage(content=response.choices[0].message.content)],
+            "messages": [AIMessage(content=response.text)],
             "risk_level": risk_level
         }
     except Exception:
