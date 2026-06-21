@@ -14,6 +14,7 @@ from uuid import uuid4
 from ai_service import predict_initial_profile
 from services.trend_engine import analyze_student_state
 from routers.agent_router import router as agent_router
+from routers.digital_twin_router import router as digital_twin_router
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +160,9 @@ app.add_middleware(
 # ── State-Driven Context Injector (new agent orchestration routes) ──────────
 app.include_router(agent_router)
 
+# ── Digital Twin routes ──────────────────────────────────────────────────────
+app.include_router(digital_twin_router)
+
 
 # ---------------------------------------------------------------------------
 # Request Schemas
@@ -169,7 +173,6 @@ class InitialProfilingRequest(BaseModel):
     culturalContext: Dict[str, Any]
     diagnosticAssessment: Optional[Dict[str, Any]] = None
     userId: Optional[str] = None
-    diagnosticAssessment: Optional[Dict[str, Any]] = None
 
 
 class AnalyzeStateRequest(BaseModel):

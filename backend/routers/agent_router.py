@@ -46,7 +46,9 @@ from sqlalchemy import desc
 from db import get_db, AgentMemoryORM, InitialProfileORM, SessionLocal
 from services.context_retriever import get_student_context
 from services.state_engine import build_prompt_package, PROMPT_TEMPLATE_A, PROMPT_TEMPLATE_B, PROMPT_TEMPLATE_C
-from services.gemini_agent import call_gemini, summarize_conversation_memory, extract_profile_updates
+from services.gemini_agent import call_gemini, summarize_conversation_memory, extract_profile_updates, _count_tokens_approx
+from services.rag_service import retrieve_rag_context, embed_and_save_exchange, write_cross_agent_memory
+from services.agent_registry import detect_off_topic
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["Agent Orchestration"])
@@ -85,12 +87,34 @@ SOCIAL_KEYWORDS = {
 
 
 def _route_agent(message: str) -> dict:
+    """
+    Called ONLY when the user is in coordinator/auto mode.
+    Explicit agent selections (academic, wellness, social) bypass this entirely
+    and are handled directly in Express chatController.js.
+    """
     text = (message or "").lower()
+
+    # Wellness signals
     if any(keyword in text for keyword in WELLNESS_KEYWORDS):
         return {"routeTo": "wellness", "reason": "wellness_keywords"}
+
+    # Social signals
     if any(keyword in text for keyword in SOCIAL_KEYWORDS):
         return {"routeTo": "social", "reason": "social_keywords"}
-    return {"routeTo": "academic", "reason": "default_academic"}
+
+    # Academic signals (explicit check, not just a fallback)
+    academic_keywords = {
+        "study", "exam", "quiz", "assignment", "homework", "learn",
+        "explain", "understand", "concept", "topic", "course", "lecture",
+        "programming", "code", "math", "algorithm", "formula", "calculate",
+        "help me with", "how does", "what is", "teach me", "practice",
+        "problem", "question", "answer", "chapter", "textbook",
+    }
+    if any(keyword in text for keyword in academic_keywords):
+        return {"routeTo": "academic", "reason": "academic_keywords"}
+
+    # Default to coordinator for general / ambiguous messages
+    return {"routeTo": "coordinator", "reason": "general_query"}
 
 
 def _should_redirect_to_wellness(message: str) -> bool:
@@ -126,33 +150,74 @@ def _update_profile_from_chat(
     chat_history: List[dict],
     database_chat_history: List[dict],
 ) -> None:
+    """
+    Background task after every chat response:
+      1. Save exchange to episodic_memory (pgvector RAG)
+      2. Write cross-agent memory state
+      3. Update InitialProfile with any detected risk signals
+      4. Update Digital Twin with a chat-inferred interaction
+    """
     db = SessionLocal()
     try:
-        profile = db.query(InitialProfileORM).filter(InitialProfileORM.user_id == user_id).first()
-        if not profile:
-            return
+        # ── 1. Embed exchange into episodic_memory ─────────────────────────
+        embed_and_save_exchange(db, user_id, agent_type, message, response)
 
+        # ── 2. Cross-agent memory state write ─────────────────────────────
         conversation_text = _format_chat_for_updates(chat_history, database_chat_history, message, response)
-        from services.gemini_agent import summarize_and_embed_episodic_memory
-        summarize_and_embed_episodic_memory(db, user_id, conversation_text)
-        updates = extract_profile_updates(conversation_text)
+        key_context = f"Topic: {skill_name}. Student asked: {message[:200]}. Agent responded about: {response[:200]}"
+        mood_signal = None
+        cog_signal = None
+        if agent_type == "wellness":
+            mood_signal = "stressed" if any(w in message.lower() for w in ("stress", "anxious", "overwhelmed", "sad", "depressed")) else "neutral"
+            cog_signal = "critical_struggle" if mood_signal == "stressed" else None
+        elif agent_type == "academic":
+            cog_signal = "productive_struggle" if any(w in message.lower() for w in ("don't understand", "confused", "help", "stuck")) else "engaged"
 
-        if isinstance(updates, dict):
-            score = updates.get("learning_barriers_score")
-            wellness_needed = updates.get("wellness_support_needed")
-            social_needed = updates.get("social_support_needed")
+        write_cross_agent_memory(db, user_id, agent_type, key_context, mood=mood_signal, cognitive_state=cog_signal)
 
-            if isinstance(score, (int, float)):
-                profile.learning_barriers_score = max(0.0, min(float(score), 1.0))
-            if isinstance(wellness_needed, bool):
-                profile.wellness_support_needed = wellness_needed
-            if isinstance(social_needed, bool):
-                profile.social_support_needed = social_needed
+        # ── 3. Update InitialProfile risk signals ──────────────────────────
+        profile = db.query(InitialProfileORM).filter(InitialProfileORM.user_id == user_id).first()
+        if profile:
+            updates = extract_profile_updates(conversation_text)
+            if isinstance(updates, dict):
+                score = updates.get("learning_barriers_score")
+                wellness_needed = updates.get("wellness_support_needed")
+                social_needed = updates.get("social_support_needed")
+                if isinstance(score, (int, float)):
+                    profile.learning_barriers_score = max(0.0, min(float(score), 1.0))
+                if isinstance(wellness_needed, bool):
+                    profile.wellness_support_needed = wellness_needed
+                if isinstance(social_needed, bool):
+                    profile.social_support_needed = social_needed
+                db.commit()
 
-            db.commit()
+        # ── 4. Digital Twin update from chat interaction ───────────────────
+        try:
+            from services.digital_twin_updater import DigitalTwinUpdater
+            updater = DigitalTwinUpdater(db)
+            # Chat messages are interactions with type "chat" — approximate skill_id=0
+            chat_interaction = {
+                "skill_id": 0,
+                "problem_id": 0,
+                "correct": True,  # chat = positive engagement by default
+                "time_on_task_ms": 8000,
+                "hints_used": 0,
+                "attempt_count": 1,
+                "mood": mood_signal,
+                "confidence_before": 0.5,
+                "confidence_after": 0.6,
+                "interaction_type": f"chat_{agent_type}",
+            }
+            updater.process_new_interaction(user_id, chat_interaction)
+        except Exception as twin_exc:
+            logger.debug("Digital Twin chat update skipped: %s", twin_exc)
+
     except Exception as exc:
         logger.warning("Profile update failed: %s", exc)
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -336,37 +401,55 @@ async def agent_chat(
         payload.user_id, payload.skill_name, payload.agent_type,
     )
 
-    # ── Task 1: Context Retrieval ─────────────────────────────────────────
-    ctx = get_student_context(
-        db=db,
-        user_id=payload.user_id,
-        skill_name=payload.skill_name,
-        user_message=payload.message,
-    )
-
+    # ── Task 1: Context Retrieval (9 DB queries) ──────────────────────────
     routed_agent = payload.agent_type
     routing_decision = None
     if payload.agent_type in {"coordinator", "router", "auto"}:
         routing_decision = _route_agent(payload.message)
         routed_agent = routing_decision.get("routeTo", "academic")
 
-    # ── Task 2: State + Prompt Engineering ───────────────────────────────
+    ctx = get_student_context(
+        db=db,
+        user_id=payload.user_id,
+        skill_name=payload.skill_name,
+        user_message=payload.message,
+        agent_type=routed_agent,
+    )
+
+    # ── RAG: Retrieve relevant context from pgvector ──────────────────────
+    rag_context = retrieve_rag_context(
+        db=db,
+        user_id=payload.user_id,
+        query_text=payload.message,
+        agent_type=routed_agent,
+        top_k_episodic=3,
+        top_k_knowledge=2,
+    )
+
+    # ── Task 2: State + Prompt Engineering (full context, no truncation) ──
     prompt_pkg = build_prompt_package(
         ctx=ctx,
         user_message=payload.message,
         student_name=payload.student_name,
         agent_type=routed_agent,
         orchestration_context=payload.orchestration_context,
+        rag_context=rag_context,
     )
 
-    # ── Task 4: Token-Optimized Gemini Call ──────────────────────────────
-    if routed_agent == "academic" and _should_redirect_to_wellness(payload.message):
+    # ── Hard off-topic guard (runs BEFORE LLM call, saves API cost) ─────────
+    off_topic_redirect = detect_off_topic(routed_agent, payload.message)
+    if off_topic_redirect:
+        response_text = off_topic_redirect
+    elif routed_agent == "academic" and _should_redirect_to_wellness(payload.message):
         response_text = ACADEMIC_REFERRAL_TEXT
     else:
+        # RAG context is already embedded in the system prompt via build_prompt_package,
+        # so we skip the internal pgvector call inside call_gemini (needs_pgvector=False)
+        # to avoid burning an extra embedding API call per request.
         response_text = call_gemini(
             system_instruction=prompt_pkg.system_instruction,
             user_message=prompt_pkg.user_message,
-            needs_pgvector=prompt_pkg.needs_pgvector,
+            needs_pgvector=False,
             skill_name=payload.skill_name,
             db=db,
             chat_history=payload.chat_history,
@@ -374,8 +457,6 @@ async def agent_chat(
             user_id=payload.user_id,
         )
 
-    # Approximate token count for response metadata
-    from services.gemini_agent import _count_tokens_approx, _truncate_to_token_limit
     token_count = _count_tokens_approx(prompt_pkg.system_instruction)
 
     background_tasks.add_task(

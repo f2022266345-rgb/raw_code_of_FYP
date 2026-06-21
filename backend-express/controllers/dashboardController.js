@@ -85,6 +85,12 @@ const getMyDashboard = async (req, res) => {
         clerkId: user.clerkId,
         isOnboarded: Boolean(diagnosticProfile),
         createdAt: user.createdAt,
+        // Derived from stored userProfile for dashboard display
+        stressLevel: initialProfile?.userProfile?.stressLevel ?? 0,
+        currentMood: initialProfile?.userProfile?.currentMood ?? "Neutral",
+        currentPhase: initialProfile?.userProfile?.currentPhase ?? "",
+        academicConfidence: initialProfile?.userProfile?.academicConfidence ?? 0,
+        socialBattery: initialProfile?.userProfile?.socialBattery ?? "moderate",
       },
       onboardingCompleted: Boolean(diagnosticProfile),
       diagnosticProfile: diagnosticProfile
@@ -137,16 +143,24 @@ const getMyDashboard = async (req, res) => {
       // Data required for frontend dashboard features
       aiPrediction: initialProfile ? {
         ai_prediction: initialProfile.aiPrediction?.ai_prediction || {
-          status: "Unknown",
-          success_probability: 0
+          status: "Personalised",
+          success_probability: 0.7,
         },
-        user_profile: initialProfile.userProfile || {
-          major: user.major || "",
-          university: user.university || "",
+        user_profile: {
+          // Spread stored userProfile for all dashboard-readable fields
+          ...(initialProfile.userProfile || {}),
+          // Ensure required dashboard fields always present
+          major: initialProfile.userProfile?.major || initialProfile.userProfile?.program || "",
+          university: initialProfile.userProfile?.university || "",
+          stressLevel: initialProfile.userProfile?.stressLevel ?? 0,
+          currentMood: initialProfile.userProfile?.currentMood ?? "Neutral",
+          currentPhase: initialProfile.userProfile?.currentPhase ?? "",
+          academicConfidence: initialProfile.userProfile?.academicConfidence ?? 0,
+          socialBattery: initialProfile.userProfile?.socialBattery ?? "moderate",
         },
         bloomLevel: initialProfile.bloomLevel || 1,
         languageBarrierRisk: initialProfile.languageBarrierRisk || 0,
-        activeAgents: initialProfile.activeAgents || ["academic"]
+        activeAgents: initialProfile.activeAgents || ["academic"],
       } : null,
       
       bktSummary: {
@@ -186,9 +200,13 @@ const getMyDashboard = async (req, res) => {
       
       observations: {
         totalEvents: recentInteractions.length,
-        averageResponseTimeMs: recentInteractions.length > 0 
-          ? recentInteractions.reduce((acc, log) => acc + (log.responseTimeMs || 10000), 0) / recentInteractions.length 
-          : null
+        totalTimeOnPageMs: recentInteractions.reduce((acc, log) => acc + (log.sessionTimeSpentMs || 0), 0),
+        totalClicks: 0,
+        averageResponseTimeMs: recentInteractions.length > 0
+          ? recentInteractions.reduce((acc, log) => acc + (log.responseTimeMs || 0), 0) / recentInteractions.length
+          : null,
+        latestMood: recentInteractions.find(l => l.metadata?.mood)?.metadata?.mood || null,
+        latestConfidence: recentInteractions.find(l => l.metadata?.confidence != null)?.metadata?.confidence || null,
       },
       
       agentsStatus: {

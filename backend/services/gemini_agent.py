@@ -101,6 +101,16 @@ def generate_embedding(text: str) -> list[float]:
         return [0.0] * 1536
 
 
+def _get_openai_client():
+    """Returns None — OpenAI is not configured; Gemini is the primary LLM."""
+    return None
+
+
+def _count_tokens_approx(text: str) -> int:
+    """Fast word-count heuristic, no API call needed."""
+    return max(1, int(len(text.split()) / 0.75))
+
+
 def _count_tokens(text: str) -> int:
     """
     Counts tokens accurately using the official Gemini SDK method.
@@ -121,20 +131,21 @@ def _count_tokens(text: str) -> int:
 
 def _truncate_to_token_limit(text: str, max_tokens: int = 150) -> str:
     """
-    Truncates the system instruction to stay within max_tokens using accurate token counting.
-    Uses binary search for efficiency instead of word-by-word API calls.
+    Truncates the system instruction to stay within max_tokens.
+    Uses the fast word-count heuristic (no API call) so we don't burn quota
+    just for logging/truncation — only the actual generate_content call matters.
     """
-    if _count_tokens(text) <= max_tokens:
+    if _count_tokens_approx(text) <= max_tokens:
         return text
 
     words = text.split()
     left, right = 0, len(words)
     best_text = ""
-    
+
     while left <= right:
         mid = (left + right) // 2
         candidate = " ".join(words[:mid])
-        if _count_tokens(candidate) <= max_tokens:
+        if _count_tokens_approx(candidate) <= max_tokens:
             best_text = candidate
             left = mid + 1
         else:
@@ -228,16 +239,11 @@ def _summarize_history_with_ai(
         return ""
 
     summary_prompt = (
-        "You summarize tutoring conversations for context carryover. "
-        "Write 4-6 concise bullet points covering:\n"
-        "1) Current topic and goal\n"
-        "2) What student already understands\n"
-        "3) What is still confusing\n"
-        "4) Agreed next step\n"
-        "5) Emotional/cognitive cues if present\n\n"
-        f"Current user message: {user_message}\n\n"
-        "Conversation window:\n"
-        f"{context_window}"
+        "Summarize this tutoring conversation in 3-4 plain sentences covering: "
+        "what the student is studying, what they already understand, what is still confusing, "
+        "and what the agreed next step is. Write in plain prose without bullet points or dashes.\n\n"
+        f"Current student message: {user_message}\n\n"
+        f"Conversation:\n{context_window}"
     )
 
     try:
@@ -246,9 +252,9 @@ def _summarize_history_with_ai(
             model=model_name,
             contents=summary_prompt,
             config=types.GenerateContentConfig(
-                system_instruction="You summarize tutoring conversations for context carryover.",
+                system_instruction="You summarize tutoring conversations in plain prose sentences, no bullet points.",
                 temperature=0.2,
-                max_output_tokens=260,
+                max_output_tokens=200,
                 top_p=0.9,
             )
         )
@@ -284,7 +290,7 @@ def _fetch_pgvector_context(
         if not chunks:
             return None
 
-        context_text = "\n".join(f"• {c.content[:200]}" for c in chunks)
+        context_text = "\n".join(f"  Context {i+1}: {c.content[:200]}" for i, c in enumerate(chunks))
         logger.debug("pgvector scaffolding: %d chunks retrieved for skill '%s'.", len(chunks), skill_name)
         return f"\nScaffolding context for '{skill_name}':\n{context_text}"
 
@@ -317,9 +323,9 @@ def call_gemini(
     """
     client = _get_gemini_client()
 
-    optimized_instruction = _truncate_to_token_limit(system_instruction, max_tokens=150)
-    token_count = _count_tokens(optimized_instruction)
-    logger.info("System instruction: ~%d tokens (limit: 150).", token_count)
+    optimized_instruction = _truncate_to_token_limit(system_instruction, max_tokens=3000)
+    token_count = _count_tokens_approx(optimized_instruction)
+    logger.info("System instruction: ~%d tokens (limit: 3000).", token_count)
 
     scaffolding = ""
     if needs_pgvector and db is not None and skill_name:
@@ -402,12 +408,27 @@ def call_gemini(
                     return reply
 
             except Exception as model_exc:
-                logger.warning("Gemini model '%s' failed: %s", model_name, model_exc)
+                exc_type = type(model_exc).__name__
+                exc_msg = str(model_exc)
+                # Surface rate-limit / auth errors clearly so they appear in FastAPI logs
+                if any(kw in exc_msg.lower() for kw in ("429", "quota", "rate", "limit", "resource")):
+                    logger.warning(
+                        "Gemini RATE-LIMIT on model '%s': %s — consider reducing API call frequency.",
+                        model_name, exc_msg[:200],
+                    )
+                elif any(kw in exc_msg.lower() for kw in ("401", "403", "api_key", "invalid", "unauthorized")):
+                    logger.error(
+                        "Gemini AUTH ERROR on model '%s': %s — check GEMINI_API_KEY.",
+                        model_name, exc_msg[:200],
+                    )
+                else:
+                    logger.warning("Gemini model '%s' failed [%s]: %s", model_name, exc_type, exc_msg[:300])
 
+        logger.warning("All Gemini model candidates failed — returning fallback response.")
         return _fallback_response(user_message, needs_pgvector)
 
     except Exception as e:
-        logger.error("Gemini API error: %s", e)
+        logger.error("Gemini API outer error [%s]: %s", type(e).__name__, e)
         return _fallback_response(user_message, needs_pgvector)
 
 
@@ -416,14 +437,91 @@ def call_gemini(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fallback_response(user_message: str, needs_pgvector: bool) -> str:
+    """
+    Returns a contextual, varied response when the LLM call fails.
+    Matches the message content so the student gets something genuinely useful
+    rather than the same robotic phrase every time.
+    """
+    import random
+    msg = (user_message or "").lower().strip()
+
+    # ── Coding / programming ─────────────────────────────────────────────────
+    if any(w in msg for w in ("coding", "code", "programming", "python", "javascript",
+                               "c++", "java", "algorithm", "function", "bug", "error",
+                               "syntax", "loop", "variable", "class", "object")):
+        options = [
+            ("I would love to help you with coding! Could you share the specific part "
+             "you are working on or the error message you are seeing? Once I know more, "
+             "I can walk you through it step by step."),
+            ("Programming questions are my favourite. Tell me which language or topic "
+             "you are working on and where exactly you are getting stuck, then we can "
+             "work through it together from the beginning."),
+            ("Happy to help with your code. Paste the snippet or describe the problem "
+             "and I will explain what is happening and how to fix it in plain language."),
+        ]
+        return random.choice(options)
+
+    # ── Maths / science / formulas ───────────────────────────────────────────
+    if any(w in msg for w in ("math", "maths", "formula", "equation", "calculate",
+                               "physics", "chemistry", "biology", "theorem", "proof",
+                               "integral", "derivative", "algebra", "calculus")):
+        options = [
+            ("That sounds like a maths or science question. Tell me the specific topic "
+             "or share the problem statement and I will break down the solution step by "
+             "step so it makes sense."),
+            ("Science and maths problems always have a clear path once we find the right "
+             "starting point. Share the exact question or formula you are dealing with "
+             "and I will guide you through it from basics."),
+        ]
+        return random.choice(options)
+
+    # ── 'I know nothing' / complete beginner ────────────────────────────────
+    if any(phrase in msg for phrase in ("know nothing", "i know nothing", "don't know anything",
+                                         "complete beginner", "i am new", "first time",
+                                         "never studied", "where do i start", "from scratch")):
+        options = [
+            ("No worries at all, everyone starts from zero and that is perfectly fine. "
+             "Tell me which subject or topic you want to learn and I will explain it from "
+             "the very beginning using simple language and examples that make sense."),
+            ("Starting fresh is actually a great position to be in because we can build "
+             "your understanding the right way from the ground up. Which subject are you "
+             "studying? Just name the topic and we will begin together."),
+            ("That is honestly the best place to start. Tell me what subject you are "
+             "studying and I will take you from zero to a solid understanding, one clear "
+             "step at a time."),
+        ]
+        return random.choice(options)
+
+    # ── Help / confusion ────────────────────────────────────────────────────
+    if any(w in msg for w in ("help", "confused", "don't understand", "stuck", "lost",
+                               "not sure", "struggling", "difficult", "hard", "problem")):
+        options = [
+            ("Of course, I am here to help you through this. Tell me which topic or "
+             "question you are confused about and I will explain it clearly without "
+             "jargon so it actually clicks."),
+            ("I can see this is challenging you. Share the specific part that is confusing "
+             "and I will break it down into small, easy pieces so it becomes clear."),
+            ("No problem, we will figure this out together. Tell me exactly what you are "
+             "stuck on and I will guide you through it step by step."),
+        ]
+        return random.choice(options)
+
+    # ── Generic fallback (still varied) ─────────────────────────────────────
     if needs_pgvector:
-        return (
-            "Let's break this down step by step. What do you already know about this topic? "
-            "Starting from what's familiar to you will help us build up from there."
-        )
+        options = [
+            ("Tell me a bit more about what you are trying to understand and I will "
+             "give you a thorough explanation tailored to where you are right now."),
+            ("That is a great question. Give me a little more context about your topic "
+             "and I will explain it from the basics up so nothing is left unclear."),
+            ("I want to make sure I give you the most helpful answer. Could you share "
+             "which subject or concept you are working on so I can address it properly?"),
+        ]
+        return random.choice(options)
+
     return (
-        "That's a great question! I'm processing your context to give you the best answer. "
-        "Could you tell me a bit more about what specifically is confusing you?"
+        "I want to give you the most useful answer I can. Could you share a bit more "
+        "detail about what you are working on or what is confusing you? "
+        "I am here and ready to help."
     )
 
 

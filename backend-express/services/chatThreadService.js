@@ -7,34 +7,23 @@ export const getOrCreateActiveThread = async ({
   routingAgent = "coordinator",
   threadId = null,
 }) => {
+  // Resume a specific thread if a threadId is provided
   if (threadId) {
-    const existing = await ChatThread.findOne({
-      where: { id: threadId, userId },
-    });
-    if (existing) {
-      if (existing.currentRoutingAgent !== routingAgent) {
-        await existing.update({ currentRoutingAgent: routingAgent });
-      }
-      return existing;
-    }
+    const existing = await ChatThread.findOne({ where: { id: threadId, userId } });
+    if (existing) return existing;
   }
 
-  const latest = await ChatThread.findOne({
-    where: { userId },
+  // Each agent has its own isolated thread so their conversation histories
+  // don't bleed into each other. Cross-agent context is handled via the
+  // agent_memory and episodic_memory tables, not via shared chat threads.
+  const agentThread = await ChatThread.findOne({
+    where: { userId, currentRoutingAgent: routingAgent },
     order: [["createdAt", "DESC"]],
   });
 
-  if (latest) {
-    if (latest.currentRoutingAgent !== routingAgent) {
-      await latest.update({ currentRoutingAgent: routingAgent });
-    }
-    return latest;
-  }
+  if (agentThread) return agentThread;
 
-  return ChatThread.create({
-    userId,
-    currentRoutingAgent: routingAgent,
-  });
+  return ChatThread.create({ userId, currentRoutingAgent: routingAgent });
 };
 
 export const buildDatabaseChatHistory = async ({

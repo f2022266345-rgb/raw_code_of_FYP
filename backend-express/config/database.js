@@ -1,24 +1,28 @@
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
-dotenv.config();
+// Load .env from backend-express/ using an absolute path so it works
+// regardless of which directory the server process is started from.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, "../.env") });
 
-// Option 1: Use a single connection string (Best for Production/Docker)
-// Example: postgres://user:pass@localhost:5432/dbname
 const databaseUrl = process.env.DATABASE_URL;
 
 const sequelize = databaseUrl
   ? new Sequelize(databaseUrl, {
       dialect: "postgres",
-      logging: false, // Set to console.log to see SQL queries
+      logging: false,
     })
   : new Sequelize(
-      process.env.DB_NAME || "postgres",
-      process.env.DB_USER || "postgres",
-      String(process.env.DB_PASSWORD || ""),
+      process.env.DB_NAME    || "FYP_backup",
+      process.env.DB_USER    || "postgres",
+      String(process.env.DB_PASSWORD || "admin"),
       {
-        host: process.env.DB_HOST || "localhost",
-        port: Number(process.env.DB_PORT) || 5432,
+        host:    process.env.DB_HOST || "localhost",
+        port:    Number(process.env.DB_PORT) || 5432,
         dialect: "postgres",
         logging: false,
       },

@@ -122,6 +122,7 @@ class EpisodicMemoryORM(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    agent_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     summary_text: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
@@ -336,6 +337,149 @@ class OutcomeReportORM(Base):
     recommendations_next_cycle: Mapped[list | None] = mapped_column(JSON, nullable=True)
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, nullable=False)
+
+
+# ============================================================================
+# DIGITAL TWIN ORM MODELS
+# Created by FastAPI's init_db(); also set up via backend/migrations/002_digital_twin_tables.sql
+# ============================================================================
+
+class StudentProfileORM(Base):
+    __tablename__ = "student_profiles"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), unique=True, nullable=False, index=True)
+    education_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    university: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    major: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    entrance_exam_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    first_language: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    english_proficiency: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    language_barrier_risk: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.5)
+    cultural_background: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    socioeconomic_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    first_generation_student: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    learning_style: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    preferred_challenge_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    study_location: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    academic_support_needed: Mapped[bool] = mapped_column(Boolean, default=False)
+    wellness_support_needed: Mapped[bool] = mapped_column(Boolean, default=False)
+    social_support_needed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+
+
+class CognitiveStateORM(Base):
+    __tablename__ = "cognitive_state"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), unique=True, nullable=False, index=True)
+    current_bloom_level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    bkt_mastery_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    cognitive_state: Mapped[str] = mapped_column(String(50), default="developing", nullable=False)
+    state_confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    engagement_level: Mapped[str] = mapped_column(String(50), default="engaged", nullable=False)
+    frustration_estimate: Mapped[float] = mapped_column(Float, default=0.3)
+    motivation_index: Mapped[float] = mapped_column(Float, default=0.7)
+    cognitive_load_estimate: Mapped[float] = mapped_column(Float, default=0.4)
+    learning_velocity: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_time_per_problem: Mapped[float | None] = mapped_column(Float, nullable=True)
+    session_duration_preference: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+
+
+class LearningInteractionORM(Base):
+    __tablename__ = "learning_interactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    session_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    interaction_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    problem_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    skill_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    time_on_task_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attempt_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hints_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence_before: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_after: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mood: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    stress_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    interaction_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    device_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+
+class SkillMasteryORM(Base):
+    __tablename__ = "skill_mastery"
+    __table_args__ = (UniqueConstraint("user_id", "skill_id", name="uq_skill_mastery_user_skill"),)
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    skill_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    p_mastery: Mapped[float] = mapped_column(Float, default=0.2)
+    p_init: Mapped[float] = mapped_column(Float, default=0.2)
+    p_transit: Mapped[float] = mapped_column(Float, default=0.1)
+    p_guess: Mapped[float] = mapped_column(Float, default=0.25)
+    p_slip: Mapped[float] = mapped_column(Float, default=0.05)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    incorrect_count: Mapped[int] = mapped_column(Integer, default=0)
+    practice_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_practiced: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    days_since_practice: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class WellnessStateORM(Base):
+    __tablename__ = "wellness_state"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), unique=True, nullable=False, index=True)
+    stress_level_30d: Mapped[float] = mapped_column(Float, default=0.3)
+    anxiety_markers: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    burnout_risk: Mapped[float] = mapped_column(Float, default=0.0)
+    has_study_group: Mapped[bool] = mapped_column(Boolean, default=False)
+    peer_interaction_frequency: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    social_integration_score: Mapped[float] = mapped_column(Float, default=0.5)
+    family_pressure_level: Mapped[int] = mapped_column(Integer, default=2)
+    home_study_environment_quality: Mapped[str] = mapped_column(String(50), default="moderate")
+    last_wellness_check: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recommended_intervention: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    intervention_status: Mapped[str] = mapped_column(String(50), default="pending")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+
+
+class DigitalTwinPredictionORM(Base):
+    __tablename__ = "digital_twin_predictions"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), unique=True, nullable=False, index=True)
+    predicted_next_problem_correctness: Mapped[float] = mapped_column(Float, default=0.5)
+    predicted_learning_trajectory: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    at_risk_probability: Mapped[float] = mapped_column(Float, default=0.3)
+    intervention_urgency: Mapped[str] = mapped_column(String(50), default="normal")
+    recommended_agent_type: Mapped[str] = mapped_column(String(50), default="coordinator")
+    recommended_pacing: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    recommended_learning_style_adjustment: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    prediction_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    confidence_score: Mapped[float] = mapped_column(Float, default=0.5)
+    model_version: Mapped[str] = mapped_column(String(50), default="baseline")
+
+
+class LearningProgressORM(Base):
+    __tablename__ = "learning_progress"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    current_topic: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    topic_start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    problems_completed: Mapped[int] = mapped_column(Integer, default=0)
+    problems_correct: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_completion_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    milestones_achieved: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    next_milestone: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pacing_adjustments: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    language_support_level: Mapped[str] = mapped_column(String(50), default="none")
+    chunking_size: Mapped[str] = mapped_column(String(50), default="medium")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
 
 
 def init_db() -> None:

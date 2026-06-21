@@ -70,8 +70,23 @@ export const mapToDiagnosticProfile = ({
     AI_TO_TECH_ACCESS[learningPreferences.aiExperience] ||
     "Laptop";
 
+  // Derive bloom level from self-assessment data (FastAPI ML will refine further)
+  const confidenceLevel = Number(diagnosticAssessment.confidenceLevel || 5);
+  const currentSemester = Number(diagnosticAssessment.currentSemester || 1);
+  const previousPerformance = diagnosticAssessment.previousPerformance || "average";
+  const performanceBonus =
+    previousPerformance === "excellent" ? 2 :
+    previousPerformance === "good" ? 1 :
+    previousPerformance === "below-average" ? -1 : 0;
+  const semesterBonus = currentSemester >= 5 ? 1 : 0;
+  const derivedBloom = Math.min(6, Math.max(1,
+    Math.round((confidenceLevel / 10) * 4 + performanceBonus + semesterBonus)
+  ));
+
   const bloomLevel = Number(
-    diagnosticAssessment.bloomLevel || diagnosticAssessment.bloom_level || 1,
+    diagnosticAssessment.bloomLevel ||
+    diagnosticAssessment.bloom_level ||
+    derivedBloom,
   );
 
   // Courses to seed in academic_progress

@@ -12,7 +12,22 @@ const {
   AcademicProgress,
   ChatMessage,
   WellnessLog,
+  InitialProfile,
 } = db;
+
+const FASTAPI_DT_URL = process.env.FASTAPI_BASE_URL || "http://localhost:8080";
+
+async function _fetchDigitalTwinData(userId) {
+  try {
+    const resp = await fetch(`${FASTAPI_DT_URL}/api/digital-twin/student/${userId}`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    if (resp.ok) return await resp.json();
+  } catch {
+    // non-fatal
+  }
+  return null;
+}
 
 const FASTAPI_BASE_URL =
   process.env.FASTAPI_BASE_URL || "http://localhost:8080";
@@ -99,19 +114,26 @@ const chatWithAgent = async (req, res) => {
       });
     }
 
+    // "tutor" is served by academic; coordinator/auto may use the LLM router.
+    // All other explicit agent choices (academic, wellness, social) are ALWAYS
+    // respected — we never override a user's explicit agent selection.
+    const ROUTABLE_AGENTS = new Set(["coordinator", "auto", "router"]);
     let routedAgentType = _mapAgentToSender(agentType === "tutor" ? "academic" : agentType);
 
-    try {
-      const routerResp = await _postFastApiJson("/api/agent/router", {
-        message,
-        user_id: userId,
-        skill_name: skillName,
-      });
-      if (routerResp?.decision?.routeTo) {
-        routedAgentType = _mapAgentToSender(routerResp.decision.routeTo);
+    if (ROUTABLE_AGENTS.has(agentType)) {
+      // Only call the router when the user is in coordinator / auto mode
+      try {
+        const routerResp = await _postFastApiJson("/api/agent/router", {
+          message,
+          user_id: userId,
+          skill_name: skillName,
+        });
+        if (routerResp?.decision?.routeTo) {
+          routedAgentType = _mapAgentToSender(routerResp.decision.routeTo);
+        }
+      } catch (routeErr) {
+        console.error("Router model call failed:", routeErr.message);
       }
-    } catch (routeErr) {
-      console.error("Router model call failed:", routeErr.message);
     }
 
     const thread = await getOrCreateActiveThread({
@@ -123,13 +145,14 @@ const chatWithAgent = async (req, res) => {
     const userRecord = await db.User.findByPk(userId);
     const actualStudentName = userRecord ? userRecord.fullName : (req.user?.fullName || "the student");
 
-    const diagnosticProfile = await DiagnosticProfile.findOne({ where: { userId } });
-    const academicRows = await AcademicProgress.findAll({ where: { userId }, limit: 8 });
-    const databaseChatHistory = await buildDatabaseChatHistory({
-      threadId: thread.id,
-      agentFilter: routedAgentType,
-      limit: 12,
-    });
+    const [diagnosticProfile, academicRows, initialProfile, databaseChatHistory, digitalTwinData] =
+      await Promise.all([
+        DiagnosticProfile.findOne({ where: { userId } }),
+        AcademicProgress.findAll({ where: { userId }, limit: 8 }),
+        InitialProfile.findOne({ where: { userId } }),
+        buildDatabaseChatHistory({ threadId: thread.id, agentFilter: routedAgentType, limit: 16 }),
+        _fetchDigitalTwinData(userRecord ? userRecord.id : userId),
+      ]);
 
     await ChatMessage.create({
       threadId: thread.id,
@@ -159,18 +182,43 @@ const chatWithAgent = async (req, res) => {
         : 1;
 
     const orchestrationContext = {
-      profile: diagnosticProfile
+      profile: {
+        // DiagnosticProfile fields
+        priorEducation: diagnosticProfile?.priorEducation,
+        primaryLanguage: diagnosticProfile?.primaryLanguage,
+        englishProficiency: diagnosticProfile?.englishProficiency,
+        commuteType: diagnosticProfile?.commuteType,
+        techAccess: diagnosticProfile?.techAccess,
+        // InitialProfile fields
+        learningPreferences: initialProfile?.learningPreferences || {},
+        culturalContext: initialProfile?.culturalContext || {},
+        cognitiveRules: initialProfile?.cognitiveRules || {},
+        activeAgents: initialProfile?.activeAgents || [],
+        languageBarrierRisk: initialProfile?.languageBarrierRisk,
+        wellnessSupportNeeded: initialProfile?.wellnessSupportNeeded,
+        socialSupportNeeded: initialProfile?.socialSupportNeeded,
+        userProfile: initialProfile?.userProfile || {},
+      },
+      bloomLevel: avgBloom,
+      languagePreference: initialProfile?.learningPreferences?.languagePreference || "english-only",
+      // Digital Twin live state
+      digitalTwin: digitalTwinData
         ? {
-            priorEducation: diagnosticProfile.priorEducation,
-            primaryLanguage: diagnosticProfile.primaryLanguage,
-            commuteType: diagnosticProfile.commuteType,
-            techAccess: diagnosticProfile.techAccess,
+            cognitiveState: digitalTwinData.cognitive_state?.cognitive_state,
+            bloomLevel: digitalTwinData.cognitive_state?.current_bloom_level,
+            frustration: digitalTwinData.cognitive_state?.frustration_estimate,
+            motivation: digitalTwinData.cognitive_state?.motivation_index,
+            engagement: digitalTwinData.cognitive_state?.engagement_level,
+            atRisk: digitalTwinData.predictions?.at_risk_probability,
+            recommendedAgent: digitalTwinData.predictions?.recommended_agent_type,
+            stressLevel: digitalTwinData.wellness?.stress_level_30d,
+            burnoutRisk: digitalTwinData.wellness?.burnout_risk,
           }
         : {},
-      bloomLevel: avgBloom,
       coordinatorDecision: {
         targetAgent: routedAgentType,
         matchedRule: "schema_v2_routing",
+        rationale: `Routed to ${routedAgentType} based on message analysis`,
       },
     };
 

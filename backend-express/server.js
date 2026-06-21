@@ -1,7 +1,16 @@
 import express from "express";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+// Resolve .env from the backend-express directory using an absolute path
+// so the server works regardless of which directory it's launched from.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = dirname(__filename);
+dotenv.config({ path: join(__dirname, ".env") });
+
 import { sequelize } from "./config/database.js";
 import cors from "cors";
-import dotenv from "dotenv";
 import { initializeClerkMiddleware, requireAuth } from "./middlewares/clerkMiddleware.js";
 import OnboardingRoutes from "./routes/OnboardingRoutes.js";
 import DashboardRoutes from "./routes/dashboardRoutes.js";
@@ -11,6 +20,7 @@ import ChatRoutes from "./routes/chatRoutes.js";
 import WebhookRoutes from "./routes/webhookRoutes.js";
 import ClerkAuthRoutes from "./routes/clerkAuthRoutes.js";
 import CounselorRoutes from "./routes/counselorRoutes.js";
+import DigitalTwinRoutes from "./routes/digitalTwinRoutes.js";
 import "./services/cronJobs.js";
 
 dotenv.config();
@@ -52,6 +62,7 @@ app.use("/api/observations", requireAuth, ObservationsRoutes);
 app.use("/api/bkt", requireAuth, BktRoutes);
 app.use("/api/chat", requireAuth, ChatRoutes);
 app.use("/api/counselor", requireAuth, CounselorRoutes);
+app.use("/api/digital-twin", DigitalTwinRoutes);
 
 app.get("/", (_req, res) => {
   res.json({ message: "AI Academy Backend is running", version: "3.0.0" });
@@ -70,15 +81,33 @@ app.get("/health", async (_req, res) => {
   }
 });
 
+async function connectWithRetry(retries = 8, delayMs = 3000) {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      await sequelize.authenticate();
+      return;
+    } catch (err) {
+      const isRecovery =
+        err.message.includes("recovery mode") ||
+        err.message.includes("starting up") ||
+        err.message.includes("ECONNREFUSED");
+      if (isRecovery && i < retries) {
+        console.log(`Database not ready yet (${err.message.split("\n")[0]}). Retrying ${i}/${retries} in ${delayMs / 1000}s...`);
+        await new Promise((res) => setTimeout(res, delayMs));
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
 async function startServer() {
   const BORDER = "------------------------------------------";
 
   try {
     console.log("\nInitializing Lumina Express Backend v3.0...");
 
-    await sequelize.authenticate();
-    // Migrations should be handled via the migration scripts in production
-    // await sequelize.sync({ alter: true });
+    await connectWithRetry();
 
     console.log("Database: PostgreSQL connection established.");
     console.log("Database: Automatic schema syncing disabled. Run migrations manually.");

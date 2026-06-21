@@ -80,13 +80,36 @@ const onboardingController = async (req, res) => {
       culturalContext,
       diagnosticAssessment: diagnosticAssessment || null,
       userProfile: {
+        // Institution
         university: educationalBackground.university,
         program: educationalBackground.program,
+        major: educationalBackground.program,       // alias used by dashboard store
+        // Location & language
         city: culturalContext.city,
+        background: culturalContext.background,
         primaryLanguage: culturalContext.primaryLanguage,
         englishProficiency: educationalBackground.englishProficiency,
+        // Learning
         studyPace: learningPreferences.studyPace,
         languagePreference: learningPreferences.languagePreference,
+        learningStyles: learningPreferences.learningStyles,
+        studyHoursPerWeek: learningPreferences.studyHoursPerWeek,
+        strongestSubject: learningPreferences.strongestSubject,
+        weakestSubject: learningPreferences.weakestSubject,
+        // Self-assessment (Step 4)
+        currentSemester: diagnosticAssessment?.currentSemester,
+        academicGoal: diagnosticAssessment?.academicGoal,
+        confidenceLevel: diagnosticAssessment?.confidenceLevel,
+        previousPerformance: diagnosticAssessment?.previousPerformance,
+        preferredStudyTime: diagnosticAssessment?.preferredStudyTime,
+        // Dashboard-required derived fields
+        currentPhase: `Semester ${diagnosticAssessment?.currentSemester || 1}`,
+        academicConfidence: ((diagnosticAssessment?.confidenceLevel || 5) / 10),
+        socialBattery:
+          culturalContext.familySupport === "very-strong" ? "full" :
+          culturalContext.familySupport === "limited" ? "low" : "moderate",
+        currentMood: wellnessData.sentimentMarker,
+        stressLevel: wellnessData.stressIndicator,
       },
       aiPrediction: {},  // will update after FastAPI call
       bloomLevel: mapped.bloomLevel,
@@ -183,6 +206,13 @@ const onboardingController = async (req, res) => {
             learningPreferences,
             culturalContext,
             diagnosticAssessment: diagnosticAssessment || null,
+            selfAssessment: {
+              currentSemester: diagnosticAssessment?.currentSemester || 1,
+              academicGoal: diagnosticAssessment?.academicGoal || "pass-course",
+              confidenceLevel: diagnosticAssessment?.confidenceLevel || 5,
+              previousPerformance: diagnosticAssessment?.previousPerformance || "average",
+              preferredStudyTime: diagnosticAssessment?.preferredStudyTime || "evening",
+            },
             userId,
           }),
         },
@@ -219,7 +249,17 @@ const onboardingController = async (req, res) => {
     });
 
     await initialProfile.update({
-      aiPrediction: mlPrediction || {},
+      aiPrediction: {
+        ...(mlPrediction || {}),
+        ai_prediction: {
+          status: "Personalised",
+          success_probability: mlPrediction?.success_probability || (
+            ((diagnosticAssessment?.confidenceLevel || 5) / 10) * 0.6 +
+            (wellnessSupportNeeded ? 0.1 : 0.2) +
+            (languageBarrierRisk < 0.4 ? 0.2 : 0.1)
+          ),
+        },
+      },
       bloomLevelPredicted: mapped.bloomLevel,
       bloomLevel: mapped.bloomLevel,
       languageBarrierRisk,
@@ -228,7 +268,92 @@ const onboardingController = async (req, res) => {
       academicSupportNeeded: true,
       cognitiveRules,
       activeAgents,
+      // Refresh userProfile with final ML-adjusted values
+      userProfile: {
+        university: educationalBackground.university,
+        program: educationalBackground.program,
+        major: educationalBackground.program,
+        city: culturalContext.city,
+        background: culturalContext.background,
+        primaryLanguage: culturalContext.primaryLanguage,
+        englishProficiency: educationalBackground.englishProficiency,
+        studyPace: learningPreferences.studyPace,
+        languagePreference: learningPreferences.languagePreference,
+        learningStyles: learningPreferences.learningStyles,
+        studyHoursPerWeek: learningPreferences.studyHoursPerWeek,
+        strongestSubject: learningPreferences.strongestSubject,
+        weakestSubject: learningPreferences.weakestSubject,
+        currentSemester: diagnosticAssessment?.currentSemester,
+        academicGoal: diagnosticAssessment?.academicGoal,
+        confidenceLevel: diagnosticAssessment?.confidenceLevel,
+        previousPerformance: diagnosticAssessment?.previousPerformance,
+        preferredStudyTime: diagnosticAssessment?.preferredStudyTime,
+        currentPhase: `Semester ${diagnosticAssessment?.currentSemester || 1}`,
+        academicConfidence: ((diagnosticAssessment?.confidenceLevel || 5) / 10),
+        socialBattery:
+          culturalContext.familySupport === "very-strong" ? "full" :
+          culturalContext.familySupport === "limited" ? "low" : "moderate",
+        currentMood: wellnessData.sentimentMarker,
+        stressLevel: wellnessData.stressIndicator,
+        bloomLevel: mapped.bloomLevel,
+        languageBarrierRisk,
+        activeAgents,
+      },
     });
+
+    // ── Step 9: Initialize Digital Twin (non-fatal) ───────────────
+    try {
+      await fetch(`${FASTAPI_BASE_URL}/api/digital-twin/initialize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          bloom_level: mapped.bloomLevel,
+          language_barrier_risk: languageBarrierRisk,
+          initial_predictions: {
+            language_barrier_risk: languageBarrierRisk,
+            wellness_support_needed: wellnessSupportNeeded,
+            social_support_needed: socialSupportNeeded,
+            academic_support_needed: true,
+          },
+        }),
+      });
+    } catch (twinErr) {
+      console.warn("Digital Twin initialization skipped (non-fatal):", twinErr.message);
+    }
+
+    // ── Step 10: Embed student profile into pgvector (non-fatal) ──
+    // Fires as a background task in FastAPI — does not block the response.
+    try {
+      const rawProfileText = [
+        `University: ${educationalBackground.university || ""}`,
+        `Program: ${educationalBackground.program || ""}`,
+        `Prior Education: ${educationalBackground.priorEducation || ""}`,
+        `School Type: ${educationalBackground.schoolType || ""}`,
+        `Primary Language: ${culturalContext.primaryLanguage || ""}`,
+        `English Proficiency: ${educationalBackground.englishProficiency || ""}`,
+        `Study Pace: ${learningPreferences.studyPace || ""}`,
+        `Learning Styles: ${(learningPreferences.learningStyles || []).join(", ")}`,
+        `Courses: ${(mapped.courses || []).join(", ")}`,
+        `Bloom Level: ${mapped.bloomLevel}`,
+        `Language Barrier Risk: ${languageBarrierRisk}`,
+        `Wellness Support Needed: ${wellnessSupportNeeded}`,
+        `Social Support Needed: ${socialSupportNeeded}`,
+        `City: ${culturalContext.city || ""}`,
+        `Family Pressure: ${culturalContext.familyPressure || ""}`,
+        `Study Hours Per Week: ${learningPreferences.studyHoursPerWeek || ""}`,
+        `Tech Access: ${learningPreferences.techAccess || ""}`,
+        `Commute Type: ${learningPreferences.commuteType || ""}`,
+      ].join("\n");
+
+      await fetch(`${FASTAPI_BASE_URL}/api/agent/onboarding/synthesize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, raw_profile_text: rawProfileText }),
+      });
+    } catch (embedErr) {
+      console.warn("Profile vector embedding skipped (non-fatal):", embedErr.message);
+    }
 
     // ── Return dashboard-ready payload ────────────────────────────
     return res.status(200).json({
@@ -279,6 +404,8 @@ const onboardingController = async (req, res) => {
         "social_metrics_seeded",
         "wellness_log_created",
         mlPrediction ? "ml_prediction_applied" : "ml_skipped_using_rules",
+        "digital_twin_initialized",
+        "profile_embedding_queued",
         "dashboard_ready",
       ],
     });
