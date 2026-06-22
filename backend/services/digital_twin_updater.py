@@ -144,9 +144,10 @@ class DigitalTwinUpdater:
         self.db.execute(
             text("""
                 INSERT INTO skill_mastery
-                    (user_id, skill_id, p_mastery, practice_count,
-                     correct_count, incorrect_count, last_practiced)
-                VALUES (:uid, :sid, :pm, 1, :cc, :ic, NOW())
+                    (user_id, skill_id, p_mastery, p_init, p_transit, p_guess, p_slip,
+                     practice_count, correct_count, incorrect_count, last_practiced)
+                VALUES (:uid, :sid, :pm, :p_init, :p_transit, :p_guess, :p_slip,
+                     1, :cc, :ic, NOW())
                 ON CONFLICT (user_id, skill_id) DO UPDATE SET
                     p_mastery       = :pm,
                     practice_count  = skill_mastery.practice_count + 1,
@@ -158,6 +159,12 @@ class DigitalTwinUpdater:
                 "uid": user_id,
                 "sid": skill_id,
                 "pm":  new_mastery,
+                # BKT priors — supplied explicitly because the columns are NOT NULL
+                # and the ORM-level defaults don't apply to raw INSERTs.
+                "p_init":    0.2,
+                "p_transit": 0.1,
+                "p_guess":   0.25,
+                "p_slip":    0.05,
                 "cc":  1 if correct else 0,
                 "ic":  0 if correct else 1,
             },

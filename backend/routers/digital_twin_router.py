@@ -72,10 +72,11 @@ async def initialize_student_digital_twin(
                 INSERT INTO student_profiles
                     (user_id, education_level, first_language, english_proficiency,
                      language_barrier_risk, academic_support_needed,
-                     wellness_support_needed, social_support_needed)
+                     wellness_support_needed, social_support_needed,
+                     created_at, updated_at)
                 VALUES (:uid, '1st_semester', 'urdu',
                     CASE WHEN :lbr > 0.5 THEN 'intermediate' ELSE 'advanced' END,
-                    :lbr, :acad, :well, :soc)
+                    :lbr, :acad, :well, :soc, NOW(), NOW())
                 ON CONFLICT (user_id) DO NOTHING
             """),
             {
@@ -92,8 +93,8 @@ async def initialize_student_digital_twin(
                 INSERT INTO cognitive_state
                     (user_id, current_bloom_level, cognitive_state, engagement_level,
                      frustration_estimate, motivation_index, cognitive_load_estimate,
-                     learning_velocity)
-                VALUES (:uid, 1, 'developing', 'engaged', 0.3, 0.8, 0.4, 0.0)
+                     learning_velocity, last_updated)
+                VALUES (:uid, 1, 'developing', 'engaged', 0.3, 0.8, 0.4, 0.0, NOW())
                 ON CONFLICT (user_id) DO NOTHING
             """),
             {"uid": uid},
@@ -101,8 +102,8 @@ async def initialize_student_digital_twin(
 
         db.execute(
             text("""
-                INSERT INTO wellness_state (user_id, stress_level_30d, burnout_risk, social_integration_score)
-                VALUES (:uid, 0.4, 0.0, 0.5)
+                INSERT INTO wellness_state (user_id, stress_level_30d, burnout_risk, social_integration_score, updated_at)
+                VALUES (:uid, 0.4, 0.0, 0.5, NOW())
                 ON CONFLICT (user_id) DO NOTHING
             """),
             {"uid": uid},
@@ -113,8 +114,9 @@ async def initialize_student_digital_twin(
             text("""
                 INSERT INTO digital_twin_predictions
                     (user_id, predicted_next_problem_correctness, at_risk_probability,
-                     recommended_agent_type, confidence_score, model_version)
-                VALUES (:uid, 0.5, 0.2, :agent, 0.6, 'onboarding_baseline')
+                     recommended_agent_type, confidence_score, model_version,
+                     prediction_timestamp)
+                VALUES (:uid, 0.5, 0.2, :agent, 0.6, 'onboarding_baseline', NOW())
                 ON CONFLICT (user_id) DO NOTHING
             """),
             {"uid": uid, "agent": recommended},
@@ -149,6 +151,23 @@ async def get_digital_twin(user_id: str, db: Session = Depends(get_db)):
             """),
             {"uid": user_id},
         ).fetchone()
+
+        if not cs:
+            # Auto-create a baseline twin + vector record on first access (e.g.
+            # at login) instead of 404-ing, so every student is personalized.
+            try:
+                from services.student_bootstrap import ensure_student_personalization
+                ensure_student_personalization(db, user_id)
+            except Exception as boot_exc:
+                logger.debug("twin auto-create skipped: %s", boot_exc)
+            cs = db.execute(
+                text("""
+                    SELECT user_id, current_bloom_level, cognitive_state,
+                           engagement_level, frustration_estimate, motivation_index
+                    FROM cognitive_state WHERE user_id = :uid
+                """),
+                {"uid": user_id},
+            ).fetchone()
 
         if not cs:
             raise HTTPException(status_code=404, detail="No digital twin found for this user")

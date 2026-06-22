@@ -1,0 +1,132 @@
+name: CI
+
+# Auto commit detection: runs on every push/PR. The `changes` job detects
+# which service a commit touched, and only the affected build jobs run.
+on:
+  push:
+    branches: [master, main, claude]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Detect which parts of the monorepo changed ───────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      express: ${{ steps.filter.outputs.express }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            express:
+              - 'backend-express/**'
+            frontend:
+              - 'FYP_Project/**'
+
+  # ── FastAPI backend: install + import smoke test ─────────────
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fyp_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/fyp_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # safe wheel coverage; bump to 3.14 if needed
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Byte-compile all sources
+        working-directory: backend
+        run: python -m compileall -q .
+      - name: Enable pgvector + run SQL migrations
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import os, glob
+          from sqlalchemy import create_engine, text
+          url = os.environ["DATABASE_URL"]
+          eng = create_engine(url, future=True)
+          with eng.begin() as c:
+              c.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
+          print("pgvector enabled. SQL migrations are applied by the Express job against the shared DB.")
+          PY
+
+  # ── Express backend: install + migration scripts ─────────────
+  express:
+    needs: changes
+    if: needs.changes.outputs.express == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fyp_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fyp_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend-express/package-lock.json
+      - name: Install dependencies
+        working-directory: backend-express
+        run: npm ci
+      - name: Sync models (creates all tables) — verifies migrations run
+        working-directory: backend-express
+        run: node scripts/run_migration_008_sync_models.js
+
+  # ── Frontend: install + production build ─────────────────────
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_EXPRESS_API_BASE: http://localhost:4000
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: FYP_Project/package-lock.json
+      - name: Install dependencies
+        working-directory: FYP_Project
+        run: npm ci
+      - name: Build
+        working-directory: FYP_Project
+        run: npm run build

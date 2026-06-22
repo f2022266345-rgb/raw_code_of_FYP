@@ -27,7 +27,7 @@ def _normalize_database_url(raw_url: str) -> str:
 
 
 DATABASE_URL = _normalize_database_url(
-    os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/FYP_backup")
+    os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/FYP_DB_Latest")
 )
 
 
@@ -365,8 +365,8 @@ class StudentProfileORM(Base):
     academic_support_needed: Mapped[bool] = mapped_column(Boolean, default=False)
     wellness_support_needed: Mapped[bool] = mapped_column(Boolean, default=False)
     social_support_needed: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc, server_default=text("now()"))
 
 
 class CognitiveStateORM(Base):
@@ -385,7 +385,7 @@ class CognitiveStateORM(Base):
     learning_velocity: Mapped[float] = mapped_column(Float, default=0.0)
     avg_time_per_problem: Mapped[float | None] = mapped_column(Float, nullable=True)
     session_duration_preference: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    last_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+    last_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc, server_default=text("now()"))
 
 
 class LearningInteractionORM(Base):
@@ -405,7 +405,7 @@ class LearningInteractionORM(Base):
     confidence_after: Mapped[float | None] = mapped_column(Float, nullable=True)
     mood: Mapped[str | None] = mapped_column(String(50), nullable=True)
     stress_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    interaction_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    interaction_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, server_default=text("now()"))
     device_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
 
@@ -444,7 +444,7 @@ class WellnessStateORM(Base):
     last_wellness_check: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     recommended_intervention: Mapped[str | None] = mapped_column(String(255), nullable=True)
     intervention_status: Mapped[str] = mapped_column(String(50), default="pending")
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc, server_default=text("now()"))
 
 
 class DigitalTwinPredictionORM(Base):
@@ -459,7 +459,7 @@ class DigitalTwinPredictionORM(Base):
     recommended_agent_type: Mapped[str] = mapped_column(String(50), default="coordinator")
     recommended_pacing: Mapped[str | None] = mapped_column(String(50), nullable=True)
     recommended_learning_style_adjustment: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    prediction_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    prediction_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, server_default=text("now()"))
     confidence_score: Mapped[float] = mapped_column(Float, default=0.5)
     model_version: Mapped[str] = mapped_column(String(50), default="baseline")
 
@@ -479,7 +479,7 @@ class LearningProgressORM(Base):
     pacing_adjustments: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     language_support_level: Mapped[str] = mapped_column(String(50), default="none")
     chunking_size: Mapped[str] = mapped_column(String(50), default="medium")
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc, server_default=text("now()"))
 
 
 def init_db() -> None:

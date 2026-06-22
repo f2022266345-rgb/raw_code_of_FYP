@@ -20,22 +20,15 @@ logger = logging.getLogger(__name__)
 _gemini_client = None
 
 def _iter_model_candidates() -> List[str]:
-    # Keep order, drop empties, and dedupe.
-    candidates = [
-        os.getenv("GEMINI_MODEL", "").strip(),
-        # Sensible defaults
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-    ]
-    seen = set()
-    ordered: List[str] = []
-    for model_name in candidates:
-        if not model_name or model_name in seen:
-            continue
-        seen.add(model_name)
-        ordered.append(model_name)
-    return ordered
+    """Single simple model: gemini-2.5-flash (overridable via GEMINI_MODEL).
+
+    We deliberately do NOT fall back to gemini-2.0-flash / gemini-1.5-flash —
+    on the free tier those return 0-quota 429s or 404s, which only wasted retries
+    and burned time without ever succeeding. One model keeps behaviour simple and
+    predictable.
+    """
+    model_name = os.getenv("GEMINI_MODEL", "").strip() or "gemini-2.5-flash"
+    return [model_name]
 
 
 def _get_gemini_client():
@@ -238,6 +231,12 @@ def _summarize_history_with_ai(
     if not context_window:
         return ""
 
+    # Conserve free-tier quota: the raw context window already carries the recent
+    # turns into the prompt, so this extra summarization call is OFF by default.
+    # Set GEMINI_HISTORY_SUMMARY=1 to re-enable it.
+    if os.getenv("GEMINI_HISTORY_SUMMARY", "0").strip() not in ("1", "true", "True"):
+        return ""
+
     summary_prompt = (
         "Summarize this tutoring conversation in 3-4 plain sentences covering: "
         "what the student is studying, what they already understand, what is still confusing, "
@@ -391,18 +390,11 @@ def call_gemini(
                         logger.warning("Continuation call failed: %s", continuation_exc)
 
                 if reply and not _looks_incomplete(reply):
-                    final_reply = reply
-                    try:
-                        conv_text = "\n\n".join(filter(None, [context_window, user_message, final_reply]))
-                        updates = extract_profile_updates(conv_text)
-                        if isinstance(updates, dict) and db is not None and user_id:
-                            try:
-                                update_student_parameters(db, user_id, updates)
-                            except Exception as uerr:
-                                logger.warning("update_student_parameters failed: %s", uerr)
-                    except Exception:
-                        logger.debug("Profile update extraction skipped or failed.")
-                    return final_reply
+                    # NOTE: profile-update extraction is intentionally NOT done here.
+                    # The agent_router background task (_update_profile_from_chat)
+                    # owns that, so we never spend a second generate_content call
+                    # per chat — the free-tier quota (20/day) is reserved for replies.
+                    return reply
 
                 if reply:
                     return reply
@@ -626,9 +618,54 @@ def summarize_and_embed_episodic_memory(db, user_id: str, conversation_text: str
         db.rollback()
 
 
+_HEUR_WELLNESS = (
+    "stress", "stressed", "anxiety", "anxious", "panic", "depress", "sad",
+    "overwhelmed", "burnout", "hopeless", "exhausted", "can't cope", "cant cope",
+    "crying", "worthless", "mental",
+)
+_HEUR_SOCIAL = (
+    "lonely", "alone", "isolat", "no friends", "friendless", "left out",
+    "study group", "peer", "fit in", "belong",
+)
+_HEUR_CONFUSION = (
+    "don't understand", "dont understand", "confused", "confusing", "stuck",
+    "lost", "no idea", "too hard", "difficult", "struggling", "give up",
+)
+
+
+def _heuristic_profile_updates(conversation_text: str) -> dict:
+    """
+    Keyword-based profile signal extraction — NO LLM call.
+
+    This is the default so we don't burn the free-tier generate_content quota
+    on every chat. It is good enough to flag wellness/social support needs and
+    a rough learning-barriers score. Set GEMINI_PROFILE_EXTRACTION=1 to use the
+    higher-quality LLM extractor instead.
+    """
+    text_l = conversation_text.lower()
+    wellness = any(kw in text_l for kw in _HEUR_WELLNESS)
+    social = any(kw in text_l for kw in _HEUR_SOCIAL)
+    confusion_hits = sum(1 for kw in _HEUR_CONFUSION if kw in text_l)
+
+    score = None
+    if confusion_hits or wellness:
+        score = min(0.3 + 0.15 * confusion_hits + (0.2 if wellness else 0.0), 1.0)
+
+    return {
+        "learning_barriers_score": round(score, 2) if score is not None else None,
+        "wellness_support_needed": True if wellness else None,
+        "social_support_needed": True if social else None,
+        "notes": "heuristic",
+    }
+
+
 def extract_profile_updates(conversation_text: str) -> dict:
     """
     Extracts profile update signals from a conversation.
+
+    Default path is a zero-cost keyword heuristic (no Gemini call). Only when
+    GEMINI_PROFILE_EXTRACTION=1 is set do we spend a generate_content request on
+    the higher-quality structured LLM extraction.
     """
     if not conversation_text.strip():
         return {
@@ -638,14 +675,13 @@ def extract_profile_updates(conversation_text: str) -> dict:
             "notes": "empty conversation",
         }
 
+    use_llm = os.getenv("GEMINI_PROFILE_EXTRACTION", "0").strip() in ("1", "true", "True")
+    if not use_llm:
+        return _heuristic_profile_updates(conversation_text)
+
     client = _get_gemini_client()
     if client is None:
-        return {
-            "learning_barriers_score": None,
-            "wellness_support_needed": None,
-            "social_support_needed": None,
-            "notes": "llm unavailable",
-        }
+        return _heuristic_profile_updates(conversation_text)
 
     system_prompt = (
         "You extract structured learning-risk signals from tutoring chats. "

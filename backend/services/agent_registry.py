@@ -37,13 +37,112 @@ def _contains_any(text: str, keywords: frozenset) -> bool:
     return any(kw in lower for kw in keywords)
 
 
-def detect_off_topic(agent_type: str, message: str) -> Optional[str]:
-    """
-    Hard pre-LLM check. Returns a redirect message string if the message
-    is clearly off-topic for the given agent, else returns None.
+# ─────────────────────────────────────────────────────────────────────────────
+# Personalization helpers — let each agent "mimic" awareness of the student's
+# live learning status and mind status when it redirects.
+# ─────────────────────────────────────────────────────────────────────────────
 
-    This runs BEFORE calling the LLM so we never waste an API call on a
-    clear scope violation.
+AGENT_DISPLAY = {
+    "academic": "Academic Agent",
+    "wellness": "Wellness Agent",
+    "social": "Social Agent",
+    "coordinator": "Coordinator Agent",
+}
+
+_BLOOM_LABELS = {
+    1: "Remember", 2: "Understand", 3: "Apply",
+    4: "Analyse", 5: "Evaluate", 6: "Create",
+}
+
+
+def _learning_snapshot(ctx) -> str:
+    """A short, human sentence describing what the student is currently learning."""
+    if ctx is None:
+        return ""
+    try:
+        bloom = int(getattr(ctx, "effective_bloom", 1) or 1)
+        bloom = max(1, min(6, bloom))
+        mastery = int(round(float(getattr(ctx, "p_mastery", 0.0) or 0.0) * 100))
+        skill = (getattr(ctx, "skill_name", "") or "").strip()
+        label = _BLOOM_LABELS.get(bloom, "Remember")
+        if skill and skill.lower() not in ("general", "unknown", "none"):
+            return (
+                f"Right now you're working on {skill} at Bloom level {bloom} ({label}), "
+                f"sitting at about {mastery}% mastery"
+            )
+        return f"Right now you're at Bloom level {bloom} ({label}), around {mastery}% mastery"
+    except Exception:
+        return ""
+
+
+def _mind_snapshot(ctx) -> str:
+    """A short, human sentence describing the student's current mind / mood status."""
+    if ctx is None:
+        return ""
+    try:
+        mood = (getattr(ctx, "effective_mood", "") or "").strip()
+        frustration = int(round(float(getattr(ctx, "twin_frustration", 0.0) or 0.0) * 100))
+        motivation = int(round(float(getattr(ctx, "twin_motivation", 0.0) or 0.0) * 100))
+        bits = []
+        if mood and mood.lower() not in ("neutral", "unknown", "none", ""):
+            bits.append(f"your mood reads as {mood.lower()}")
+        if frustration >= 60:
+            bits.append(f"frustration is running high (~{frustration}%)")
+        elif motivation and motivation < 40:
+            bits.append(f"motivation looks low (~{motivation}%)")
+        if not bits:
+            return ""
+        return "and " + " and ".join(bits)
+    except Exception:
+        return ""
+
+
+def _personalized_redirect(agent_type: str, target_agent: str, ctx, student_name: str) -> str:
+    """
+    Build a redirect that (1) makes clear the question is outside this agent's
+    scope, (2) mimics the agent by referencing the student's live learning +
+    mind status, and (3) points them to the right agent to talk to.
+    """
+    here = AGENT_DISPLAY.get(agent_type, "this agent")
+    there = AGENT_DISPLAY.get(target_agent, "the right specialist")
+    name = (student_name or "").strip()
+    greeting = f"{name}, " if name and name.lower() != "the student" else ""
+
+    learning = _learning_snapshot(ctx)
+    mind = _mind_snapshot(ctx)
+    status_line = ""
+    if learning or mind:
+        status_line = " " + " ".join(filter(None, [learning + ("," if learning and mind else ""), mind])).strip()
+        if status_line and not status_line.endswith((".", "!")):
+            status_line += "."
+
+    # What the target agent is for, phrased warmly.
+    target_focus = {
+        "wellness": "how you're feeling and your emotional wellbeing",
+        "academic": "the actual studying, concepts and problem-solving",
+        "social": "friends, study groups and campus life",
+        "coordinator": "the bigger picture across all areas",
+    }.get(target_agent, "this area")
+
+    return (
+        f"{greeting}as your {here}, this question is really about {target_focus}, "
+        f"which sits outside what I focus on, so it's not something I'm the right one to answer.{status_line} "
+        f"Please talk to the {there} for this, as they're properly equipped to help you here, "
+        f"and I'll be right with you to pick things up the moment you're ready to continue."
+    )
+
+
+def build_redirect(agent_type: str, target_agent: str, ctx=None, student_name: str = "") -> str:
+    """Public helper to build a personalized scope-redirect message (mimics the
+    agent and references the student's live learning + mind status)."""
+    return _personalized_redirect(agent_type, target_agent, ctx, student_name)
+
+
+def detect_off_topic_target(agent_type: str, message: str) -> Optional[str]:
+    """
+    Hard pre-LLM scope check. Returns the agent key the student SHOULD be talking
+    to (e.g. "wellness" / "academic") if the message is clearly off-topic for the
+    current agent, else None.
     """
     if not message:
         return None
@@ -55,27 +154,16 @@ def detect_off_topic(agent_type: str, message: str) -> Optional[str]:
 
     if agent_type == "academic":
         if is_wellness and not is_academic:
-            return (
-                "I can hear that you're going through a tough time emotionally. "
-                "I'm the Academic Agent and I want to make sure you get the right support — "
-                "please switch to the **Wellness Agent** who is better equipped to help with what you're feeling. "
-                "I'm here whenever you're ready to work on academics together."
-            )
+            return "wellness"
 
     elif agent_type == "wellness":
         if is_academic and not is_wellness:
-            # Only hard-redirect for deep tutoring requests, not casual academic mentions
             deep_tutoring = any(phrase in lower for phrase in (
                 "solve this", "explain this concept", "homework help",
                 "teach me how to", "step by step solution", "calculate",
             ))
             if deep_tutoring:
-                return (
-                    "That sounds like a great academic question! "
-                    "I'm the Wellness Agent focused on your mental and emotional wellbeing. "
-                    "For detailed academic help, please switch to the **Academic Agent**. "
-                    "I'm here if you want to talk about how you're feeling."
-                )
+                return "academic"
 
     elif agent_type == "social":
         if not is_social and not is_wellness:
@@ -84,13 +172,29 @@ def detect_off_topic(agent_type: str, message: str) -> Optional[str]:
                 "i don't understand the formula",
             ))
             if deep_academic:
-                return (
-                    "That's a detailed academic question — the **Academic Agent** would be perfect for that! "
-                    "I'm the Social Agent focused on your relationships, study groups, and campus life. "
-                    "Come back to me when you want help connecting with peers or finding study partners."
-                )
+                return "academic"
 
-    return None  # no redirect needed
+    return None
+
+
+def detect_off_topic(
+    agent_type: str,
+    message: str,
+    ctx=None,
+    student_name: str = "",
+) -> Optional[str]:
+    """
+    Hard pre-LLM check. Returns a personalized redirect message if the message is
+    clearly off-topic for the given agent, else None.
+
+    When `ctx` (a StudentContext) is supplied, the redirect mimics the agent by
+    weaving in the student's live learning status and mind/mood status. Runs
+    BEFORE the LLM call so we never spend an API request on a clear scope miss.
+    """
+    target = detect_off_topic_target(agent_type, message)
+    if not target:
+        return None
+    return _personalized_redirect(agent_type, target, ctx, student_name)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

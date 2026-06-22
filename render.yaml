@@ -1,0 +1,84 @@
+# ─────────────────────────────────────────────────────────────
+# Render Blueprint — one-click deploy of the whole LUMINA stack.
+# In Render: New + → "Blueprint" → point at this repo.
+# Fill the values marked `sync: false` in the dashboard after creation.
+# Docs: https://render.com/docs/blueprint-spec
+# ─────────────────────────────────────────────────────────────
+
+databases:
+  - name: lumina-db
+    databaseName: fyp_db_latest
+    plan: free
+    postgresMajorVersion: "16"
+    # pgvector is available on Render Postgres; enable it once with:
+    #   CREATE EXTENSION IF NOT EXISTS vector;
+    # (see DEPLOYMENT.md → "Enable pgvector on Render")
+
+services:
+  # ── FastAPI AI backend ───────────────────────────────────────
+  - type: web
+    name: lumina-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /docs
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lumina-db
+          property: connectionString
+      # Render gives postgresql://... ; psycopg in db.py auto-upgrades it.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-001
+
+  # ── Express API gateway ──────────────────────────────────────
+  - type: web
+    name: lumina-express
+    runtime: docker
+    dockerfilePath: ./backend-express/Dockerfile
+    dockerContext: ./backend-express
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lumina-db
+          property: connectionString
+      - key: FASTAPI_BASE_URL
+        fromService:
+          type: web
+          name: lumina-backend
+          property: host
+      - key: FRONTEND_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+
+  # ── Next.js frontend (Docker). Prefer Vercel for the frontend;
+  #    this block is here if you want everything on Render. ──────
+  - type: web
+    name: lumina-frontend
+    runtime: docker
+    dockerfilePath: ./FYP_Project/Dockerfile
+    dockerContext: ./FYP_Project
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_EXPRESS_API_BASE
+        fromService:
+          type: web
+          name: lumina-express
+          property: host
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false

@@ -48,7 +48,7 @@ from services.context_retriever import get_student_context
 from services.state_engine import build_prompt_package, PROMPT_TEMPLATE_A, PROMPT_TEMPLATE_B, PROMPT_TEMPLATE_C
 from services.gemini_agent import call_gemini, summarize_conversation_memory, extract_profile_updates, _count_tokens_approx
 from services.rag_service import retrieve_rag_context, embed_and_save_exchange, write_cross_agent_memory
-from services.agent_registry import detect_off_topic
+from services.agent_registry import detect_off_topic, build_redirect
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["Agent Orchestration"])
@@ -408,6 +408,14 @@ async def agent_chat(
         routing_decision = _route_agent(payload.message)
         routed_agent = routing_decision.get("routeTo", "academic")
 
+    # Ensure this student has a Digital Twin + pgvector record before we read
+    # context — so first-time/login users are personalized, not blank.
+    try:
+        from services.student_bootstrap import ensure_student_personalization
+        ensure_student_personalization(db, payload.user_id)
+    except Exception as boot_exc:
+        logger.debug("ensure_student_personalization skipped: %s", boot_exc)
+
     ctx = get_student_context(
         db=db,
         user_id=payload.user_id,
@@ -437,11 +445,17 @@ async def agent_chat(
     )
 
     # ── Hard off-topic guard (runs BEFORE LLM call, saves API cost) ─────────
-    off_topic_redirect = detect_off_topic(routed_agent, payload.message)
+    # ctx + student name are passed so the redirect mimics the agent and
+    # references the student's live learning status and mind/mood status.
+    off_topic_redirect = detect_off_topic(
+        routed_agent, payload.message, ctx=ctx, student_name=payload.student_name,
+    )
     if off_topic_redirect:
         response_text = off_topic_redirect
     elif routed_agent == "academic" and _should_redirect_to_wellness(payload.message):
-        response_text = ACADEMIC_REFERRAL_TEXT
+        response_text = build_redirect(
+            "academic", "wellness", ctx=ctx, student_name=payload.student_name,
+        )
     else:
         # RAG context is already embedded in the system prompt via build_prompt_package,
         # so we skip the internal pgvector call inside call_gemini (needs_pgvector=False)
@@ -690,7 +704,7 @@ async def stream_agent(payload: StreamRequest):
     async def event_generator():
         try:
             from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-            raw_db_url = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/FYP_backup")
+            raw_db_url = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/FYP_DB_Latest")
             db_url = raw_db_url.replace("+psycopg", "")
             # Using native AsyncPostgresSaver as requested in Part 1
             async with AsyncPostgresSaver.from_conn_string(db_url) as checkpointer:

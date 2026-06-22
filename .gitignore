@@ -11,6 +11,12 @@ venv/
 # Environment variables
 .env
 .env.*
+!.env.example
+
+# Node / JS (Express + any root tooling)
+node_modules/
+npm-debug.log*
+yarn-error.log*
 
 # Distribution / packaging
 build/

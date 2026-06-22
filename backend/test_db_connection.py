@@ -17,7 +17,7 @@ def _normalize(url: str) -> str:
 
 
 DB_URL = _normalize(
-    os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/FYP_backup")
+    os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/FYP_DB_Latest")
 )
 
 print("=" * 60)

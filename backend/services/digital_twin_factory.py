@@ -258,9 +258,10 @@ class DigitalTwinFactory:
                 self.db.execute(
                     text("""
                         INSERT INTO skill_mastery
-                            (user_id, skill_id, p_mastery, correct_count,
-                             incorrect_count, practice_count, last_practiced)
-                        VALUES (:uid, :sid, :pm, :cc, :ic, :pc, NOW())
+                            (user_id, skill_id, p_mastery, p_init, p_transit, p_guess, p_slip,
+                             correct_count, incorrect_count, practice_count, last_practiced)
+                        VALUES (:uid, :sid, :pm, 0.2, 0.1, 0.25, 0.05,
+                             :cc, :ic, :pc, NOW())
                         ON CONFLICT (user_id, skill_id) DO UPDATE SET
                             p_mastery      = :pm,
                             correct_count  = :cc,

@@ -39,7 +39,7 @@ Thumbs.db
 tmp/
 temp/
 
-# Optional: lock files (keep ONE depending on your package manager)
-package-lock.json
+# Lock files: COMMIT package-lock.json so `npm ci` (Docker/CI) is reproducible.
+# Ignore the other package managers' lock files only.
 yarn.lock
 pnpm-lock.yaml

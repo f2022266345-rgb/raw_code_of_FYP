@@ -330,6 +330,13 @@ def build_prompt_package(
         "6. Reference past context from memories when relevant.",
         "7. If frustration > 60% or motivation < 40%, be extra patient and encouraging.",
         "8. Keep responses focused and practical for Pakistani university context.",
+        "9. Speak as this specific agent and stay in character. Naturally reflect the student's "
+        "current learning status (their topic, Bloom level, mastery) and their mind/mood status "
+        "so they feel understood — do not dump raw numbers, weave it into the conversation.",
+        "10. If the question is clearly outside your scope, do NOT attempt to answer it. Say plainly "
+        "that this is not something you handle, briefly acknowledge where they are in their learning "
+        "and how they seem to be feeling, then name the exact agent they should talk to "
+        "(Academic, Wellness, or Social) and invite them back when ready.",
         "",
         "═══ FORMATTING RULES (MUST FOLLOW) ═══",
         "Write every response in natural flowing paragraphs.",

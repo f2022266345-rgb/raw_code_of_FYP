@@ -17,7 +17,7 @@ const sequelize = databaseUrl
       logging: false,
     })
   : new Sequelize(
-      process.env.DB_NAME    || "FYP_backup",
+      process.env.DB_NAME    || "FYP_DB_Latest",
       process.env.DB_USER    || "postgres",
       String(process.env.DB_PASSWORD || "admin"),
       {

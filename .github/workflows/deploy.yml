@@ -1,0 +1,81 @@
+name: Deploy
+
+# Auto deploy on commits to the default branch. Each service deploys ONLY
+# when its files changed. Set the secrets referenced below in:
+#   Repo → Settings → Secrets and variables → Actions
+#
+# Required secrets (create the ones you use):
+#   RENDER_DEPLOY_HOOK_BACKEND   - Render "Deploy Hook" URL for lumina-backend
+#   RENDER_DEPLOY_HOOK_EXPRESS   - Render "Deploy Hook" URL for lumina-express
+#   VERCEL_DEPLOY_HOOK_FRONTEND  - Vercel "Deploy Hook" URL for the frontend
+#
+# (Render/Vercel can also auto-deploy on push without this file — this gives
+#  you path-scoped control so unrelated commits don't redeploy everything.)
+on:
+  push:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      express: ${{ steps.filter.outputs.express }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            express:
+              - 'backend-express/**'
+            frontend:
+              - 'FYP_Project/**'
+
+  deploy-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy (backend)
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}" ]; then
+            curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}"
+            echo "Backend deploy triggered."
+          else
+            echo "RENDER_DEPLOY_HOOK_BACKEND not set — skipping."
+          fi
+
+  deploy-express:
+    needs: changes
+    if: needs.changes.outputs.express == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy (express)
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_EXPRESS }}" ]; then
+            curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_EXPRESS }}"
+            echo "Express deploy triggered."
+          else
+            echo "RENDER_DEPLOY_HOOK_EXPRESS not set — skipping."
+          fi
+
+  deploy-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel deploy (frontend)
+        run: |
+          if [ -n "${{ secrets.VERCEL_DEPLOY_HOOK_FRONTEND }}" ]; then
+            curl -fsS -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_FRONTEND }}"
+            echo "Frontend deploy triggered."
+          else
+            echo "VERCEL_DEPLOY_HOOK_FRONTEND not set — skipping."
+          fi

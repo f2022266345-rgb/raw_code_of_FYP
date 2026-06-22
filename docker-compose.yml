@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────
+# LUMINA — full local/VM stack: Postgres+pgvector, FastAPI,
+# Express, and the Next.js frontend.
+#
+#   docker compose up --build           # start everything
+#   docker compose run --rm migrate     # run all DB migrations once
+#   docker compose down                 # stop
+#   docker compose down -v              # stop + wipe the database volume
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ── PostgreSQL with the pgvector extension preinstalled ──────
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: FYP_DB_Latest
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d FYP_DB_Latest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── FastAPI AI backend ───────────────────────────────────────
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:admin@db:5432/FYP_DB_Latest
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: gemini-2.5-flash
+      GEMINI_EMBEDDING_MODEL: gemini-embedding-001
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Express API gateway ──────────────────────────────────────
+  express:
+    build: ./backend-express
+    environment:
+      DATABASE_URL: postgresql://postgres:admin@db:5432/FYP_DB_Latest
+      FASTAPI_BASE_URL: http://backend:8000
+      FRONTEND_URL: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:-}
+      CLERK_WEBHOOK_SECRET: ${CLERK_WEBHOOK_SECRET:-}
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Next.js frontend ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./FYP_Project
+      args:
+        NEXT_PUBLIC_EXPRESS_API_BASE: http://localhost:4000
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
+    environment:
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - express
+
+  # ── One-shot migration runner: Express models first (creates
+  #    `users` + Sequelize tables), then FastAPI tables + SQL
+  #    default fixes. `docker compose run --rm migrate`
+  migrate:
+    build: ./backend-express
+    profiles: ["tools"]
+    command: >
+      sh -c "node scripts/run_migration_008_sync_models.js &&
+             node scripts/run_migration_007_align_onboarding_schema.js || true"
+    environment:
+      DATABASE_URL: postgresql://postgres:admin@db:5432/FYP_DB_Latest
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # FastAPI side of migrations (pgvector + ORM tables + 00X SQL defaults).
+  # `docker compose run --rm migrate-backend`
+  migrate-backend:
+    build: ./backend
+    profiles: ["tools"]
+    command: ["python", "scripts/run_migrations.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:admin@db:5432/FYP_DB_Latest
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
