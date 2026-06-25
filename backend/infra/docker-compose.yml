@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────
+# LUMINA shared infrastructure — Postgres (pgvector) + nginx reverse proxy
+# + certbot (Let's Encrypt SSL). Deploy this ONCE on the droplet; the two
+# backend repos attach to the same external `lumina-net` network.
+#
+#   docker network create lumina-net     # one time, before first 'up'
+#   docker compose up -d
+# ─────────────────────────────────────────────────────────────
+name: lumina-infra
+
+services:
+  # ── PostgreSQL 16 with pgvector ─────────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: lumina-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-FYP_DB_Latest}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Published to localhost only so you can connect with psql over an SSH
+    # tunnel; NOT exposed to the public internet.
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - lumina-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d FYP_DB_Latest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── nginx reverse proxy + TLS termination ───────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: lumina-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    networks:
+      - lumina-net
+
+  # ── certbot (issues + renews Let's Encrypt certs) ───────────
+  certbot:
+    image: certbot/certbot
+    container_name: lumina-certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    # Renew every 12h; nginx reload is handled separately (see VM_deploy.md).
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
+
+volumes:
+  pgdata:
+
+networks:
+  lumina-net:
+    external: true

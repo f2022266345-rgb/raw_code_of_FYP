@@ -6,7 +6,7 @@
 - It combines three intelligence layers:
   - BKT mastery tracking (per-skill probability updates)
   - Cognitive trend detection (struggle/flow/disengagement)
-  - LLM response generation (Gemini, state/persona-conditioned)
+  - LLM response generation (Groq, multi-model split: router/reasoning/chat, state/persona-conditioned)
 
 ## 2) Active Stack in This Repo
 
@@ -20,7 +20,7 @@
 1. Frontend sends chat message to Express: POST /api/chat
 2. Frontend includes current in-memory chat window (recent turns) in the same request.
 3. Express authenticates user via Clerk, fetches recent persisted chat turns, and forwards both windows to FastAPI: POST /api/agent/chat
-4. FastAPI retrieves a comprehensive 6-table student context (BKT mastery, InitialProfile, InteractionLog, AgentMemory, StudentModelEmbedding, EpisodicMemory). It optionally performs lightweight routing when agent_type is coordinator/auto, applies agent-specific guardrails, builds the state/persona prompt package, builds a context window (session + DB), generates an AI summary of chat history for continuity, and then calls Gemini with prompt + context window + summary.
+4. FastAPI retrieves a comprehensive 6-table student context (BKT mastery, InitialProfile, InteractionLog, AgentMemory, StudentModelEmbedding, EpisodicMemory). It optionally performs lightweight routing when agent_type is coordinator/auto, applies agent-specific guardrails, builds the state/persona prompt package, builds a context window (session + DB) of prior turns as role/content messages, and then calls the Groq CHAT model (qwen) with system prompt + history + current message. Header "action" buttons (academic plan / wellness report / social plan) instead call the Groq REASONING model over the full student context and return structured JSON.
 5. FastAPI returns response + metadata (state, persona, p_mastery, routed_agent).
 6. Express logs user/assistant events and returns final response to frontend.
 7. FastAPI runs a background extraction step to update InitialProfile (learning_barriers_score, wellness_support_needed, social_support_needed) and synthesize EpisodicMemory based on the latest conversation summary.
@@ -80,22 +80,35 @@ Why this matters:
 - Express entry: backend-express/server.js
 - Express chat proxy: backend-express/controllers/chatController.js
 - Express onboarding bridge: backend-express/controllers/onboardingControllers.js
-- FastAPI entry: backend-fastapi/main.py
-- FastAPI router: backend-fastapi/routers/agent_router.py
-- FastAPI Gemini adapter: backend-fastapi/services/gemini_agent.py
-- Shared frontend API config: frontend/lib/api.ts
+- FastAPI entry: backend/main.py
+- FastAPI router: backend/routers/agent_router.py
+- FastAPI LLM layer (Groq): backend/services/agent_llm.py
+- FastAPI Groq client (3 role models): backend/services/groq_client.py
+- FastAPI Jina embeddings: backend/services/jina_embeddings.py
+- FastAPI agent router-model: backend/services/router_agent.py
+- FastAPI deep-report context: backend/services/user_context.py
+- Express deep-report proxies: backend-express/controllers/agentController.js
+- Express right-rail feeds: backend-express/controllers/feedController.js
+- Shared frontend API config: FYP_Project/lib/api.ts
 
 ## 5) Environment Sync Contract
 
 - Express .env (backend-express/.env):
   - PORT=4000
-  - FASTAPI_BASE_URL=<http://localhost:8080> (FastAPI backend on port 8080 due to local port conflict)
+  - FASTAPI_BASE_URL=<http://localhost:8000> (FastAPI backend)
   - DATABASE_URL=postgres://...
   - JWT_SECRET=...
-- FastAPI .env (backend-fastapi/.env):
+  - NEWS_API_KEY= / GOOGLE_PLACES_API_KEY= (optional right-rail feed providers; empty = card hides)
+- FastAPI .env (backend/.env):
   - DATABASE_URL=postgresql+psycopg://... (or normalized equivalent)
-  - GEMINI_API_KEY=... (Your Google Gemini API Key)
-  - GEMINI_MODEL=gemini-2.5-flash (or another Gemini model, e.g., gemini-1.5-flash)
+  - **Groq (chat/reasoning/routing)** — confirm live models at <https://console.groq.com/docs/models>:
+    - GROQ_API_KEY=... / GROQ_BASE_URL=https://api.groq.com/openai/v1 (the Groq SDK appends /openai/v1 itself — the client strips a duplicate)
+    - GROQ_MODEL_ROUTER=openai/gpt-oss-20b (effort=low) — function-calling / agent routing
+    - GROQ_MODEL_REASONING=openai/gpt-oss-120b (effort=high, JSON) — deep plans/reports; effort=medium (GROQ_MEDIUM_EFFORT) for LangGraph plan/analysis nodes
+    - GROQ_MODEL_CHAT=llama-3.3-70b-versatile — persona conversation (non-reasoning → fast, no thinking tokens; reasoning models are sent reasoning_format=hidden)
+  - **Gemini embeddings (pgvector)**:
+    - GEMINI_API_KEY=... (Google AI Studio) / GEMINI_EMBED_MODEL=gemini-embedding-001
+    - GEMINI_EMBED_DIM=1024 — output_dimensionality, L2-normalized in code; MUST equal the pgvector column dim (see migrations/007_jina_embeddings_1024.sql). task_type RETRIEVAL_DOCUMENT (write) / RETRIEVAL_QUERY (read).
 
 Rule: Frontend should call only Express base URL. Express talks to FastAPI via FASTAPI_BASE_URL.
 
@@ -129,9 +142,10 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
   - Initial profiling model (Random Forest, serialized)
   - Trend engine logic
   - Express↔FastAPI onboarding/chat integration
-  - Token-optimized Gemini orchestration route
+  - Token-optimized Groq (CHAT model) orchestration route
   - Context window continuity (frontend history + DB history merged per request)
-  - AI-generated chat-history summary injected into Gemini prompt
+  - Multi-model split: Groq router/reasoning/chat sharing one Jina-embedded pgvector memory
+  - Deep-report endpoints (academic plan / wellness report / social plan) + Express proxies + right-rail feeds
   - Looser conversational prompt style (less rigid response constraints)
   - Dashboard Chat History page with backend-driven search + date filters
   - Memory tab with topic-bucketed AI summaries (math, health, family, etc.)
@@ -144,16 +158,19 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
 
 ## 8) Known Risks / Notes
 
-- ✅ **FIXED: Migration to Google Gemini** - Migrated away from GitHub Models to the new Google Gemini SDK (`google-genai`). We use `from google import genai` with `genai.Client(api_key=...)`.
-- ✅ **FIXED: Port Conflict** - FastAPI now runs on port 8080 (port 8000 was occupied). Updated Express FASTAPI_BASE_URL to <http://localhost:8080>.
-- ✅ **FIXED: Truncated/Short Agent Replies** - FastAPI Gemini orchestration now prefers complete responses by default, increased response token budget, and performs a continuation call when generation stops at token limit. This prevents cut-off replies such as partial last sentences.
-- Legacy FastAPI file backend/services/chat_service.py still references OpenAI; active agent-chat flow uses gemini_agent.py through /api/agent/chat.
-- FastAPI DB init expects vector extension in local PostgreSQL.
-- If vector extension is unavailable locally, vector-dependent features may degrade or fail.
-- Initial profiling artifacts (`student_model.pkl`, `encoders.pkl`) were trained on older scikit-learn; runtime suppresses `InconsistentVersionWarning` for stability until artifacts are retrained on the current sklearn version.
-- ⚠️ **Dual LLM Path Crash**: LangGraph nodes (`app/graph/nodes/*.py` and `semester_graph.py`) reference `_get_openai_client()` which was removed in the Gemini migration. These nodes will crash at runtime.
-- ⚠️ **DB Sync Risk**: Express `server.js` uses `sequelize.sync({ alter: true })` which can modify/drop columns dynamically and cause data loss in production.
-- ⚠️ **Context Truncation Bug**: `_truncate_to_token_limit` in `gemini_agent.py` contains a bug that effectively treats word count as token count.
+- ✅ **Groq multi-model split** - All chat/reasoning/routing go through `services/groq_client.py`: `route()` (gpt-oss-20b, effort low, tool-calling), `reason()` (gpt-oss-120b, effort high/medium, JSON), `chat()` (llama-3.3-70b-versatile, non-reasoning persona). `_supports_reasoning()` gates `reasoning_format`/`reasoning_effort` so Llama isn't sent reasoning params; a one-shot retry drops them on any model that rejects them. `services/agent_llm.py` is the drop-in replacement for the old `gemini_agent.py` (same public API). Confirm live model strings at <https://console.groq.com/docs/models> before deploy.
+- ✅ **Agents answer-first** - System prompt rule 8b + the offline fallbacks forbid replying with a question / asking the student to clarify; agents make reasonable assumptions and answer. The academic-plan subject is optional (blank → plan across the student's courses), so no UI ever blocks on input.
+- ✅ **Every agent window** has a header action button + live right-rail feed + a "Saved plans & reports" card list (`app/dashboard/agent/[type]/page.tsx`); coordinator/tutor fall back to the academic plan + education feed. Generated plans/reports are stored full-JSON in the `agent_reports` table (FastAPI-managed) and listed as cards; clicking a card opens the whole report via `ReportRenderer`. Endpoints: FastAPI `GET /api/agent/reports/{user_id}?agent=` + `GET /api/agent/report/{user_id}/{id}`, proxied by Express `GET /api/agent/reports` + `/api/agent/report/:id`.
+- ✅ **Free-tier token budget** - The deep-report endpoints use `reason()` at **medium** effort with a compacted context (`_compact_ctx`) and modest `max_tokens` (≈2800-3200) to stay under Groq free tier's 8000 tokens/minute. `_reason_json` retries smaller on 413/429 and retries plain-mode on `json_validate_failed`. Bump model tier / `GROQ_REASONING_EFFORT` if on a paid Groq plan.
+- ✅ **Gemini embeddings** - Semantic memory uses `services/gemini_embeddings.py` (gemini-embedding-001 @ output_dimensionality=1024, **L2-normalized in code** since gemini-embedding-001 only auto-normalizes 3072 dims; asymmetric RETRIEVAL_DOCUMENT/RETRIEVAL_QUERY tasks). `db.EMBEDDING_DIM` is driven by `GEMINI_EMBED_DIM`. Existing DBs must run `migrations/007_jina_embeddings_1024.sql` then `scripts/reembed.py`. (Jina was removed.)
+- ✅ **FIXED: LangGraph LLM path** - `app/graph/nodes/*.py` and `semester_graph.py` now call `groq_client.complete()` (no more removed-Gemini-client crash).
+- ✅ **FIXED: Context Truncation Bug** - `_truncate_to_token_limit` in `agent_llm.py` now uses the chars/4 heuristic instead of word count.
+- ✅ **FIXED: Truncated/Short Agent Replies** - The CHAT-model turn prefers complete responses, raises the token budget, and performs a continuation call when generation hits the length limit.
+- Port: FastAPI runs on 8000 (Express `FASTAPI_BASE_URL=http://localhost:8000`).
+- Legacy FastAPI file backend/services/chat_service.py still references OpenAI; active agent-chat flow uses `agent_llm.py` through /api/agent/chat.
+- FastAPI DB init expects the `vector` extension in PostgreSQL; vector-dependent features degrade if unavailable.
+- Initial profiling artifacts (`student_model.pkl`, `encoders.pkl`) were trained on older scikit-learn; runtime suppresses `InconsistentVersionWarning` until retrained.
+- ⚠️ **DB Sync Risk**: Express `server.js` uses manual migrations (auto-sync disabled). Run `npm run db:migrate` for schema changes.
 
 ## 9) Local Run Order
 
@@ -175,19 +192,19 @@ Rule: Frontend should call only Express base URL. Express talks to FastAPI via F
 
 ## 11) Latest Code Policy
 
-- Treat `backend/routers/agent_router.py` + `backend/services/gemini_agent.py` as the active inference/chat pipeline.
+- Treat `backend/routers/agent_router.py` + `backend/services/agent_llm.py` + `backend/services/groq_client.py` as the active inference/chat pipeline.
 - Keep `AGENTS.md` updated when runtime contracts change (ports, env variables, model IDs, persistence sequence).
 - Prefer incremental updates in active files over reviving legacy paths.
 - Keep context-window contract stable across layers:
   - Frontend sends chatHistory
   - Express adds database_chat_history
-  - FastAPI summarizes + injects continuity context into Gemini prompt
+  - FastAPI merges history into role/content messages for the Groq CHAT model
 - Academic agent guardrail:
   - If a message is about stress/mental health/social issues, Academic replies with the exact Wellness handoff sentence.
 - Response quality policy for active chat pipeline:
   - Do not force ultra-short replies by default.
   - Prefer complete, coherent answers unless the student explicitly requests short output.
-  - If Gemini stops due to max token limit, continue generation and merge continuation.
+  - If the model stops due to max token limit, continue generation and merge continuation.
 - Keep chat-history and memory endpoints stable:
   - Express /api/chat/history handles date/search/filter queries against InteractionLog
   - Express /api/chat/memories builds topic buckets and requests AI summaries from FastAPI /api/agent/memory/summary
